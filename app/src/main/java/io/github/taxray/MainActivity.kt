@@ -26,12 +26,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -41,6 +46,7 @@ import io.github.taxray.ui.components.*
 import io.github.taxray.ui.screens.*
 import io.github.taxray.ui.theme.TaxLensTheme
 import kotlinx.coroutines.*
+import kotlin.math.ceil
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -204,6 +210,9 @@ fun TaxLensApp(vm: TaxLensViewModel = viewModel()) {
 @Composable
 private fun ContributionSheet(receipt: Receipt, onDismiss: () -> Unit, onShare: suspend (Bitmap) -> Unit, onSave: suspend (Bitmap) -> Unit, onError: (String) -> Unit) {
     val graphicsLayer = rememberGraphicsLayer()
+    val exportLayer = rememberGraphicsLayer()
+    val density = LocalDensity.current
+    val layoutDirection = LocalLayoutDirection.current
     val scope = rememberCoroutineScope()
     var template by remember { mutableStateOf(CardTemplate.PAPER) }
     var exporting by remember { mutableStateOf(false) }
@@ -216,7 +225,19 @@ private fun ContributionSheet(receipt: Receipt, onDismiss: () -> Unit, onShare: 
     val ready = drawn
     suspend fun export(action: suspend (Bitmap) -> Unit) {
         exporting = true
-        try { action(graphicsLayer.toImageBitmap().asAndroidBitmap()) }
+        try {
+            val sourceSize = graphicsLayer.size
+            check(sourceSize.width > 0 && sourceSize.height > 0) { "贡献卡尚未绘制 请稍后重试" }
+            val exportWidth = sourceSize.width.coerceAtLeast(1080)
+            val scaleFactor = exportWidth.toDouble() / sourceSize.width
+            val exportSize = IntSize(exportWidth, ceil(sourceSize.height * scaleFactor).toInt())
+            // Replay the card's drawing commands at export resolution before rasterization.
+            // The preview layer stays at its measured size; the sibling celebration is excluded.
+            exportLayer.record(density, layoutDirection, exportSize) {
+                scale(scaleFactor.toFloat(), pivot = Offset.Zero) { drawLayer(graphicsLayer) }
+            }
+            action(exportLayer.toImageBitmap().asAndroidBitmap())
+        }
         catch (e: CancellationException) { throw e }
         catch (e: Exception) { onError(e.message ?: "图片导出失败 请重试") }
         finally { exporting = false }

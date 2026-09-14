@@ -1,9 +1,10 @@
 package io.github.taxray.ui
 
+import androidx.compose.ui.platform.ViewRootForTest
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.taxray.MainActivity
@@ -46,12 +47,12 @@ class LedgerFlowTest {
 
     @Test fun manual13PercentReceiptCanBeSavedReviewedEditedAndDeleted() {
         compose.onNodeWithText("记一笔").performScrollTo().performClick()
-        compose.onNodeWithTag("storeName").performScrollTo().performTextReplacement(storeName)
-        compose.onNodeWithTag("itemName0").performScrollTo().performTextReplacement("UI 测试商品")
-        compose.onNodeWithTag("amount0").performScrollTo().performTextReplacement("113.00")
-        compose.onNodeWithTag("rate13_0").performScrollTo().performClick()
+        scrollToTag("storeName").performTextReplacement(storeName)
+        scrollToTag("itemName0").performTextReplacement("UI 测试商品")
+        scrollToTag("amount0").performTextReplacement("113.00")
+        scrollToTag("rate13_0").performClick()
         hideKeyboard()
-        compose.onNodeWithTag("saveReceipt").performClick()
+        compose.onNodeWithTag("saveReceipt").assertIsDisplayed().assertIsEnabled().performClick()
         waitForSavedAmount(11_300)
 
         // The dashboard's spend is displayed in one semantic node; the animated tax
@@ -78,9 +79,10 @@ class LedgerFlowTest {
         compose.onAllNodes(hasScrollToIndexAction()).onLast().performScrollToNode(hasText("编辑账单"))
         compose.onNodeWithText("编辑账单").performClick()
 
-        compose.onNodeWithTag("amount0").performScrollTo().performTextReplacement("226.00")
+        scrollToTag("amount0").performTextReplacement("226.00")
+        compose.onNodeWithTag("amount0").assertTextContains("226.00")
         hideKeyboard()
-        compose.onNodeWithTag("saveReceipt").performClick()
+        compose.onNodeWithTag("saveReceipt").assertIsDisplayed().assertIsEnabled().performClick()
         waitForSavedAmount(22_600)
         val edited = runBlocking { app.receipts.all() }.single { it.storeName == storeName }
         assertEquals(saved.id, edited.id)
@@ -100,10 +102,10 @@ class LedgerFlowTest {
 
     @Test fun customRateInputSurvivesTypingPresetPrefixes() {
         compose.onNodeWithText("记一笔").performScrollTo().performClick()
-        compose.onNodeWithTag("amount0").performScrollTo().performTextReplacement("113.00")
-        compose.onNodeWithText("自定义").performScrollTo().performClick()
+        scrollToTag("amount0").performTextReplacement("113.00")
+        scrollToTag("rateCustom_0").performClick()
         listOf("0", "6", "9", "13").forEach { prefix ->
-            compose.onNodeWithTag("customRate0").performScrollTo().performTextReplacement(prefix)
+            scrollToTag("customRate0").performTextReplacement(prefix)
             // These prefixes match preset rates, but typing a decimal must leave
             // custom mode and the text-field focus intact.
             compose.onNodeWithTag("customRate0").assertExists().performTextInput(".5")
@@ -112,6 +114,13 @@ class LedgerFlowTest {
         hideKeyboard()
         compose.onNodeWithContentDescription("关闭录入").performClick()
         compose.onNodeWithText("放弃修改").performClick()
+    }
+
+    // Lazy items outside a small viewport do not yet have semantics nodes.
+    // Ask the form container to find and compose the item before interacting.
+    private fun scrollToTag(tag: String): SemanticsNodeInteraction {
+        compose.onAllNodes(hasScrollToIndexAction()).onLast().performScrollToNode(hasTestTag(tag))
+        return compose.onNodeWithTag(tag)
     }
 
     private fun waitForSavedAmount(cents: Long) {
@@ -123,9 +132,24 @@ class LedgerFlowTest {
     }
 
     private fun hideKeyboard() {
+        // The editor belongs to a Dialog window, while history search belongs to
+        // the Activity. Target the focused field's actual root in either case.
+        compose.waitForIdle()
+        // A field behind the sheet can retain Compose focus in its own root.
+        val roots = compose.onAllNodes(isFocused()).fetchSemanticsNodes()
+            .map { (it.root as ViewRootForTest).view }.distinct()
+        val view = compose.runOnIdle { roots.single { it.hasWindowFocus() } }
         compose.runOnUiThread {
-            WindowInsetsControllerCompat(compose.activity.window, compose.activity.window.decorView)
-                .hide(WindowInsetsCompat.Type.ime())
+            checkNotNull(ViewCompat.getWindowInsetsController(view)).hide(WindowInsetsCompat.Type.ime())
+        }
+        compose.waitUntil(timeoutMillis = 5_000) {
+            var hidden = false
+            compose.runOnUiThread {
+                val insets = ViewCompat.getRootWindowInsets(view)
+                hidden = insets != null && !insets.isVisible(WindowInsetsCompat.Type.ime()) &&
+                    insets.getInsets(WindowInsetsCompat.Type.ime()).bottom == 0
+            }
+            hidden
         }
         compose.waitForIdle()
     }

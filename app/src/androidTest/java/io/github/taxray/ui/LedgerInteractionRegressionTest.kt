@@ -55,7 +55,7 @@ class LedgerInteractionRegressionTest {
                 }
             }
         }
-        compose.onNodeWithTag("amount0").assertIsDisplayed()
+        scrollToAmount().assertIsDisplayed()
 
         // This is the system Back path that previously hid the sheet too early.
         pressSystemBack()
@@ -69,7 +69,7 @@ class LedgerInteractionRegressionTest {
         compose.onNodeWithText("放弃这次修改？").assertIsDisplayed()
         compose.onNodeWithText("继续编辑").performClick()
         compose.onNodeWithText("放弃这次修改？").assertDoesNotExist()
-        compose.onNodeWithTag("amount0").assertIsDisplayed().performTextReplacement("226.00")
+        scrollToAmount().assertIsDisplayed().performTextReplacement("226.00")
         compose.runOnIdle { assertEquals("226.00", draft.value.items.single().amount) }
 
         compose.onNodeWithContentDescription("关闭录入").performClick()
@@ -78,7 +78,7 @@ class LedgerInteractionRegressionTest {
 
         // A remaining invisible modal window would intercept this tap.
         compose.onNodeWithText("打开录入").performClick()
-        compose.onNodeWithTag("amount0").assertIsDisplayed().assertTextContains("226.00")
+        scrollToAmount().assertIsDisplayed().assertTextContains("226.00")
         compose.onNodeWithContentDescription("关闭录入").performClick()
         compose.onNodeWithText("放弃修改").performClick()
     }
@@ -96,10 +96,10 @@ class LedgerInteractionRegressionTest {
                 )
             }
         }
-        compose.onNodeWithTag("amount0").assertIsDisplayed()
+        scrollToAmount().assertIsDisplayed()
         pressSystemBack()
         compose.onNodeWithText("放弃这次修改？").assertDoesNotExist()
-        compose.onNodeWithTag("amount0").assertIsDisplayed()
+        scrollToAmount().assertIsDisplayed()
         compose.runOnIdle { assertTrue(!dismissed) }
     }
 
@@ -116,7 +116,7 @@ class LedgerInteractionRegressionTest {
             hasAnyDescendant(hasText("2125", substring = true))).assertExists()
         compose.onNodeWithText("确定").performClick()
         compose.runOnIdle { assertEquals(timestamp, draft.value.timestamp) }
-        compose.onNodeWithTag("amount0").assertIsDisplayed()
+        scrollToAmount().assertIsDisplayed()
     }
 
     @Test fun searchUsesTheSameDefaultMerchantNameShownOnTheReceipt() {
@@ -146,6 +146,11 @@ class LedgerInteractionRegressionTest {
     @Test fun historyDisclaimerIsCentered() {
         showDashboard(historyOnly = true)
         assertDisclaimerIsCentered()
+    }
+
+    private fun scrollToAmount(): SemanticsNodeInteraction {
+        compose.onAllNodes(hasScrollToIndexAction()).onLast().performScrollToNode(hasTestTag("amount0"))
+        return compose.onNodeWithTag("amount0")
     }
 
     private fun showDashboard(historyOnly: Boolean, receipts: List<Receipt> = emptyList()) {

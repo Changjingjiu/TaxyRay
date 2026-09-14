@@ -184,7 +184,7 @@ class ContributionExportTest {
         assertArrayEquals(byteArrayOf(-119, 80, 78, 71, 13, 10, 26, 10), bytes.copyOf(8))
         val bitmap = requireNotNull(BitmapFactory.decodeByteArray(bytes, 0, bytes.size))
         try {
-            assertTrue("Actual Compose export is too narrow: ${bitmap.width}", bitmap.width >= 700)
+            assertTrue("HD card export must be at least 1080 px wide: ${bitmap.width}", bitmap.width >= 1080)
             assertTrue("Portrait card was clipped while capturing its scrollable layer", bitmap.height > bitmap.width)
             val colors = mutableSetOf<Int>()
             for (y in 0 until bitmap.height step (bitmap.height / 100).coerceAtLeast(1)) {
