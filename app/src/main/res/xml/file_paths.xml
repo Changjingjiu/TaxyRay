@@ -1,0 +1,4 @@
+<paths>
+    <cache-path name="share_cards" path="share/" />
+    <cache-path name="camera_capture" path="camera/" />
+</paths>

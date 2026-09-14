@@ -1,0 +1,102 @@
+TaxLens runtime third-party notices
+
+This APK includes the libraries listed below. The project's MIT license does
+not replace their licenses. Versions are taken from the resolved release SDK
+metadata. Build plugins, test dependencies and BOM-only metadata are excluded.
+
+Apache-2.0 libraries: the complete license is included as Apache-2.0.txt.
+Upstream projects:
+  AndroidX and Compose https://android.googlesource.com/platform/frameworks/support/
+  Kotlin https://github.com/JetBrains/kotlin
+  kotlinx.coroutines https://github.com/Kotlin/kotlinx.coroutines
+  kotlinx.serialization https://github.com/Kotlin/kotlinx.serialization
+  JetBrains annotations https://github.com/JetBrains/java-annotations
+  Guava listenablefuture https://github.com/google/guava
+  OkHttp https://github.com/square/okhttp
+  Okio https://github.com/square/okio
+  Material Icons https://github.com/google/material-design-icons
+
+Konfetti is licensed under ISC; its complete copyright and license notice is
+included as Konfetti.txt. The GitHub Octicons vector asset is licensed under MIT;
+its complete copyright and license notice is included as Octicons.txt.
+
+OkHttp also includes the Public Suffix List data under MPL-2.0. The complete
+MPL-2.0 license is included as MPL-2.0.txt. Its original packaged notice remains
+at okhttp3/internal/publicsuffix/NOTICE. Public Suffix List source and license:
+  https://publicsuffix.org/list/public_suffix_list.dat
+  https://publicsuffix.org/list/
+The exact compiled data shipped by OkHttp 4.12.0 and its original notice are at:
+  https://github.com/square/okhttp/tree/parent-4.12.0/okhttp/src/main/resources/okhttp3/internal/publicsuffix
+No Public Suffix List rules have been modified by TaxLens.
+
+Resolved release runtime artifacts
+androidx.activity:activity:1.9.3  Apache-2.0
+androidx.activity:activity-compose:1.9.3  Apache-2.0
+androidx.activity:activity-ktx:1.9.3  Apache-2.0
+androidx.annotation:annotation-experimental:1.4.1  Apache-2.0
+androidx.annotation:annotation-jvm:1.8.1  Apache-2.0
+androidx.arch.core:core-common:2.2.0  Apache-2.0
+androidx.arch.core:core-runtime:2.2.0  Apache-2.0
+androidx.autofill:autofill:1.0.0  Apache-2.0
+androidx.collection:collection-jvm:1.4.4  Apache-2.0
+androidx.collection:collection-ktx:1.4.4  Apache-2.0
+androidx.compose.animation:animation-android:1.7.6  Apache-2.0
+androidx.compose.animation:animation-core-android:1.7.6  Apache-2.0
+androidx.compose.foundation:foundation-android:1.7.6  Apache-2.0
+androidx.compose.foundation:foundation-layout-android:1.7.6  Apache-2.0
+androidx.compose.material:material-icons-core-android:1.7.6  Apache-2.0
+androidx.compose.material:material-icons-extended-android:1.7.6  Apache-2.0
+androidx.compose.material:material-ripple-android:1.7.6  Apache-2.0
+androidx.compose.material3:material3-android:1.3.1  Apache-2.0
+androidx.compose.runtime:runtime-android:1.7.6  Apache-2.0
+androidx.compose.runtime:runtime-saveable-android:1.7.6  Apache-2.0
+androidx.compose.ui:ui-android:1.7.6  Apache-2.0
+androidx.compose.ui:ui-geometry-android:1.7.6  Apache-2.0
+androidx.compose.ui:ui-graphics-android:1.7.6  Apache-2.0
+androidx.compose.ui:ui-text-android:1.7.6  Apache-2.0
+androidx.compose.ui:ui-tooling-preview-android:1.7.6  Apache-2.0
+androidx.compose.ui:ui-unit-android:1.7.6  Apache-2.0
+androidx.compose.ui:ui-util-android:1.7.6  Apache-2.0
+androidx.concurrent:concurrent-futures:1.1.0  Apache-2.0
+androidx.core:core:1.15.0  Apache-2.0
+androidx.core:core-ktx:1.15.0  Apache-2.0
+androidx.customview:customview-poolingcontainer:1.0.0  Apache-2.0
+androidx.emoji2:emoji2:1.3.0  Apache-2.0
+androidx.exifinterface:exifinterface:1.3.7  Apache-2.0
+androidx.graphics:graphics-path:1.0.1  Apache-2.0
+androidx.interpolator:interpolator:1.0.0  Apache-2.0
+androidx.lifecycle:lifecycle-common-java8:2.8.7  Apache-2.0
+androidx.lifecycle:lifecycle-common-jvm:2.8.7  Apache-2.0
+androidx.lifecycle:lifecycle-livedata-core:2.8.7  Apache-2.0
+androidx.lifecycle:lifecycle-process:2.8.7  Apache-2.0
+androidx.lifecycle:lifecycle-runtime-android:2.8.7  Apache-2.0
+androidx.lifecycle:lifecycle-runtime-compose-android:2.8.7  Apache-2.0
+androidx.lifecycle:lifecycle-runtime-ktx-android:2.8.7  Apache-2.0
+androidx.lifecycle:lifecycle-viewmodel-android:2.8.7  Apache-2.0
+androidx.lifecycle:lifecycle-viewmodel-compose-android:2.8.7  Apache-2.0
+androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7  Apache-2.0
+androidx.lifecycle:lifecycle-viewmodel-savedstate:2.8.7  Apache-2.0
+androidx.profileinstaller:profileinstaller:1.3.1  Apache-2.0
+androidx.room:room-common:2.6.1  Apache-2.0
+androidx.room:room-ktx:2.6.1  Apache-2.0
+androidx.room:room-runtime:2.6.1  Apache-2.0
+androidx.savedstate:savedstate:1.2.1  Apache-2.0
+androidx.savedstate:savedstate-ktx:1.2.1  Apache-2.0
+androidx.sqlite:sqlite:2.4.0  Apache-2.0
+androidx.sqlite:sqlite-framework:2.4.0  Apache-2.0
+androidx.startup:startup-runtime:1.1.1  Apache-2.0
+androidx.tracing:tracing:1.2.0  Apache-2.0
+androidx.versionedparcelable:versionedparcelable:1.1.1  Apache-2.0
+com.google.guava:listenablefuture:1.0  Apache-2.0
+com.squareup.okhttp3:okhttp:4.12.0  Apache-2.0
+com.squareup.okio:okio-jvm:3.6.0  Apache-2.0
+nl.dionsegijn:konfetti-compose:2.0.5  ISC
+nl.dionsegijn:konfetti-core:2.0.5  ISC
+org.jetbrains:annotations:23.0.0  Apache-2.0
+org.jetbrains.kotlin:kotlin-stdlib:2.1.0  Apache-2.0
+org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.10  Apache-2.0
+org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.10  Apache-2.0
+org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0  Apache-2.0
+org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.9.0  Apache-2.0
+org.jetbrains.kotlinx:kotlinx-serialization-core-jvm:1.7.3  Apache-2.0
+org.jetbrains.kotlinx:kotlinx-serialization-json-jvm:1.7.3  Apache-2.0
