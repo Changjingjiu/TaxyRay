@@ -54,4 +54,4 @@ CI 运行测试与未签名 release 构建，发布签名在维护者环境完�
 - [APK v3 签名与轮换链](https://source.android.com/docs/security/features/apksigning/v3)
 - [PackageInstaller](https://developer.android.com/reference/android/content/pm/PackageInstaller)
 
-实际验证范围见 [VERIFICATION.md](VERIFICATION.md)。
+构建与测试方式见 [DEVELOPMENT.md](DEVELOPMENT.md) 每次发行的实际验证范围见对应 [Release 说明](https://github.com/Changjingjiu/TaxLens/releases)。

@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
+  <title id="title">TaxyRay 记下消费 看见价格中的税额</title>
+  <desc id="desc">绿色小票主题封面 以含税113元按13%拆分为例 不含税金额100元 税额估算13元</desc>
+  <rect width="1200" height="420" rx="24" fill="#103e32"/>
+  <path d="M690 0v420" stroke="#31574c" stroke-dasharray="4 9"/>
+  <g fill="none" stroke="#31574c">
+    <circle cx="1170" cy="390" r="175"/><circle cx="1170" cy="390" r="220"/>
+    <path d="M0 345h690"/>
+  </g>
+  <g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Noto Sans CJK SC',sans-serif">
+    <g transform="translate(58 48)">
+      <rect width="48" height="48" rx="12" fill="#a9dfbe"/>
+      <path d="M14 10h23v30l-4-3-4 3-4-3-4 3-3-3-4 3z" fill="#103e32"/>
+      <path d="M20 17h11m-11 6h8m-8 8 4-4 4 2 4-5" stroke="#a9dfbe" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+      <text x="66" y="36" font-size="36" font-weight="650" fill="#f8faf7">TaxyRay</text>
+    </g>
+    <text x="58" y="170" font-size="47" font-weight="650" fill="#f8faf7">记下消费</text>
+    <text x="58" y="235" font-size="47" font-weight="650" fill="#a9dfbe">看见价格中的税额</text>
+    <text x="60" y="289" font-size="18" fill="#c3d5cb">你的个人消费账本  留在你的设备</text>
+    <text x="60" y="388" font-size="17" fill="#c3d5cb">离线记账</text>
+    <circle cx="165" cy="382" r="2" fill="#709689"/>
+    <text x="193" y="388" font-size="17" fill="#c3d5cb">小票识别</text>
+    <circle cx="299" cy="382" r="2" fill="#709689"/>
+    <text x="327" y="388" font-size="17" fill="#c3d5cb">贡献卡</text>
+    <g transform="translate(754 37)">
+      <path d="M0 12Q0 0 12 0h344q12 0 12 12v325l-23-10-23 10-23-10-23 10-23-10-23 10-23-10-23 10-23-10-23 10-23-10-23 10-23-10-23 10-23-10-23 10z" fill="#f9f8f3"/>
+      <text x="30" y="48" font-size="15" font-weight="600" fill="#51675e">一笔消费的拆分</text>
+      <text x="30" y="94" font-size="15" fill="#51675e">含税实付</text>
+      <text x="29" y="157" font-family="'SF Mono',Consolas,monospace" font-size="53" fill="#103e32">¥113.00</text>
+      <path d="M30 184h308" stroke="#cad8cc" stroke-dasharray="5 6"/>
+      <text x="30" y="218" font-size="14" fill="#51675e">不含税金额</text>
+      <text x="338" y="218" text-anchor="end" font-family="'SF Mono',Consolas,monospace" font-size="22" fill="#103e32">¥100.00</text>
+      <text x="30" y="260" font-size="14" fill="#08785a">税额估算</text>
+      <text x="338" y="260" text-anchor="end" font-family="'SF Mono',Consolas,monospace" font-size="28" font-weight="600" fill="#08785a">¥13.00</text>
+      <text x="30" y="302" font-size="12" fill="#6d7d73">按 13% 计算的示例  仅供个人参考</text>
+    </g>
+  </g>
+</svg>

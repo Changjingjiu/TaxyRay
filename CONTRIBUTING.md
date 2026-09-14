@@ -1,6 +1,6 @@
 # 参与贡献
 
-先阅读 README、docs/ALGORITHM.md、docs/TAX_POLICY.md 与 docs/PRIVACY.md。
+先阅读 [开发指南](docs/DEVELOPMENT.md)、[算法约定](docs/ALGORITHM.md)、[税率依据](docs/TAX_POLICY.md) 与 [隐私边界](docs/PRIVACY.md)。
 
 1. 从默认分支创建范围清楚的功能分支；避免混入与目标无关的格式化或重构。
 2. 金额只能来自十进制字符串或整数分；税率为整数基点。不得让 Float/Double 进入持久化和计税路径。
@@ -8,7 +8,7 @@
 4. 新的数据写入必须经过验证与 Room 事务；AI 原始结果不得静默入库。
 5. 新增算法、备份或安全逻辑须有对应边界测试；UI 变更应提供模拟器/真机截图并验证深色与字体缩放。
 6. 提交前运行 `./gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug`；在专用测试模拟器运行 `:app:connectedDebugAndroidTest`。Gradle会自动安装/卸载测试应用，不要使用存有真实账本的设备。
-7. 不提交 API Key、账本、消费小票、签名私钥、local.properties、build 输出或个人机器路径。
+7. 不提交 API Key、个人账本与消费小票、签名私钥、local.properties、build 输出或个人机器路径。原始需求稿、内部设计记录、临时验证报告和本地 Agent 规则仅在本地保留。README 图片只使用已核对的演示数据。
 
 PR 描述应说明问题、行为变化、测试结果以及仍需真机或真实模型验证的部分。税率更新应链接财政部、国家税务总局或国家法律法规数据库的具体官方文件，记录生效日期。不得根据博客、模型回答或商品关键词单独认定税收优惠。
 

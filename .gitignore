@@ -10,9 +10,34 @@ local.properties
 keystore.properties
 .env
 .env.*
-!\.env.example
+!.env.example
 artifacts/
 captures/
 
 __pycache__/
 *.pyc
+
+# Local planning and working records
+/AGENTS.md
+/DESIGN.md
+/PRODUCT.md
+/UX风格规范文档.md
+/完整产品功能需求说明(PRD).md
+/软件技术栈说明.md
+/docs/OPEN_SOURCE_CHECKLIST.md
+/docs/REQUIREMENTS.md
+/docs/VERIFICATION-0.1.0.md
+/docs/VERIFICATION-0.1.1.md
+/docs/VERIFICATION.md
+
+# Personal ledgers and generated installation packages
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.apk
+*.aab
+*.apks
+*.p12
+*.pfx
