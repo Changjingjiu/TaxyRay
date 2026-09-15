@@ -1,6 +1,7 @@
 package io.github.taxray
 
 import io.github.taxray.core.DraftItem
+import io.github.taxray.data.remote.ReceiptDiscount
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -72,6 +73,18 @@ class ReceiptDraftTest {
         val free = discountedDraft().copy(declaredTotal = "0").allocateDiscount()
         assertNull(free.validationMessage())
         assertTrue(free.calculated().all { it.breakdown.amountCents == 0L && it.breakdown.taxCents == 0L })
+    }
+
+    @Test fun knownUnallocatedDiscountCannotBeLostWhenPaidTotalIsMissingOrCleared() {
+        val draft = ReceiptDraft(fromVision = true, items = listOf(DraftItem(amount = "59.24")),
+            receiptDiscount = ReceiptDiscount(4, "优惠 0.04"))
+        assertEquals("识别到整单优惠 请先填写最终实付", draft.validationMessage())
+        val confirmed = draft.copy(declaredTotal = "59.20").allocateDiscount()
+        assertNull(confirmed.validationMessage())
+        assertNotNull(confirmed.copy(declaredTotal = "", appliedDiscount = null).validationMessage())
+        // An explicit matching total can confirm the line already includes its discount.
+        assertNull(draft.copy(declaredTotal = "59.24").validationMessage())
+        assertNull(draft.copy(receiptDiscount = ReceiptDiscount(0, "优惠 0.00")).validationMessage())
     }
 
     private fun discountedDraft() = ReceiptDraft(declaredTotal = "200.00", items = listOf(

@@ -46,8 +46,13 @@ class ReceiptDiscountFlowTest {
             """{"name":"演示商品${index + 1}","amount":"$amount","category":"agricultural_product","category_evidence":"演示商品","classification_issue":"none","tax_treatment":"standard"}"""
         }.joinToString(",")
         val parsed = VisionReceiptParser.parseArguments("""{"items":[$rows],"declared_total":"59.20","order_discount":{"amount":"0.04","evidence":"优惠 0.04"}}""")
-        show(ReceiptDraft(storeName = store, items = parsed.items, declaredTotal = parsed.declaredTotal!!,
+        show(ReceiptDraft(storeName = store, items = parsed.items,
             receiptDiscount = parsed.discount, fromVision = true))
+        compose.onNodeWithTag("saveReceipt").performClick()
+        compose.onNodeWithText("识别到整单优惠 请先填写最终实付").assertIsDisplayed()
+        assertTrue(runBlocking { app.receipts.all() }.none { it.storeName == store })
+        tag("declaredTotal").performTextReplacement(parsed.declaredTotal!!)
+        hideKeyboard()
         tag("allocateDiscount").assertIsEnabled()
         compose.onNodeWithTag("saveReceipt").performClick()
         compose.runOnIdle { assertNotNull(vm.editor) }
