@@ -1,5 +1,7 @@
 package io.github.taxray.ui.screens
 
+import android.view.WindowManager
+import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
@@ -11,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.*
 import androidx.compose.ui.unit.dp
@@ -30,6 +33,13 @@ fun SettingsScreen(settings: ApiSettings, settingsError: String?, busy: Boolean,
     // Deliberately not rememberSaveable: never place an API key in Activity saved state.
     var key by remember(settings) { mutableStateOf(settings.apiKey) }
     var showKey by remember { mutableStateOf(false) }
+    val window = (LocalContext.current as? ComponentActivity)?.window
+    val keyVisible = showKey && key.isNotEmpty()
+    // Protect revealed credentials only; masked settings and backup/update screens stay recordable.
+    DisposableEffect(window, keyVisible) {
+        if (keyVisible) window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        onDispose { if (keyVisible) window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
+    }
     var confirmReset by remember { mutableStateOf(false) }
     var eraseStep by remember { mutableIntStateOf(0) }
     var eraseText by remember { mutableStateOf("") }

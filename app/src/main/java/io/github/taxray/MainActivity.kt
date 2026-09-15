@@ -7,7 +7,6 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -100,11 +99,6 @@ fun TaxyRayApp(vm: TaxyRayViewModel = viewModel()) {
         if (success) imageToSend = cameraUri else scope.launch(Dispatchers.IO) { context.cacheDir.resolve("camera").deleteRecursively() }
     }
     LaunchedEffect(vm) { vm.messages.collect { snackbarHost.showSnackbar(it) } }
-    DisposableEffect(tab) {
-        val window = (context as? ComponentActivity)?.window
-        if (tab == 2) window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
-    }
     BackHandler(enabled = tab != 0 && detailId == null && cardId == null && vm.editor == null) { tab = 0 }
     val destinations = listOf("总览" to Icons.Outlined.Dashboard, "账本" to Icons.Outlined.ReceiptLong, "设置" to Icons.Outlined.Tune)
     BoxWithConstraints(Modifier.fillMaxSize()) {
