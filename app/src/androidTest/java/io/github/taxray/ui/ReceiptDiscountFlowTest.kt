@@ -49,7 +49,8 @@ class ReceiptDiscountFlowTest {
         show(ReceiptDraft(storeName = store, items = parsed.items,
             receiptDiscount = parsed.discount, fromVision = true))
         compose.onNodeWithTag("saveReceipt").performClick()
-        compose.onNodeWithText("识别到整单优惠 请先填写最终实付").assertIsDisplayed()
+        val messages = compose.onAllNodesWithText("识别到整单优惠 请先填写最终实付")
+        assertTrue(messages.fetchSemanticsNodes().indices.any { messages[it].isDisplayed() })
         assertTrue(runBlocking { app.receipts.all() }.none { it.storeName == store })
         tag("declaredTotal").performTextReplacement(parsed.declaredTotal!!)
         hideKeyboard()
