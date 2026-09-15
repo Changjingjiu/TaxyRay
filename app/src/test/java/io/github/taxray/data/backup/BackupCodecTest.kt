@@ -10,6 +10,18 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BackupCodecTest {
+    @Test fun finalDiscountedAmountsAndFreeRowsSurviveBothBackupFormats() {
+        val source = listOf(Receipt("discount", "演示账单", 1_700_000_000_000L, TaxCalculator.calculateItems(listOf(
+            DraftItem("a", "商品一", "101.80", "13"),
+            DraftItem("b", "商品二", "98.20", "9"),
+            DraftItem("c", "赠品", "0.00", "13"),
+        ))))
+        assertEquals(20000L, source.single().totalAmountCents)
+        assertEquals(1982L, source.single().totalTaxCents)
+        assertEquals(source, BackupCodec.fromJson(BackupCodec.toJson(source)))
+        assertEquals(source, BackupCodec.fromCsv(BackupCodec.toCsv(source)))
+    }
+
     private fun sample(id: String = "receipt-1") = Receipt(
         id = id,
         storeName = "测试商店",

@@ -82,7 +82,7 @@ class ReceiptRepositoryTest {
     @Test fun invalidEditLeavesPreviousReceiptUntouched() = runBlocking {
         val id = repository.save("原账单", listOf(draft("one")))
         val before = repository.all()
-        assertTrue(runCatching { repository.save("错误账单", listOf(draft("bad", "0")), id) }.isFailure)
+        assertTrue(runCatching { repository.save("错误账单", listOf(draft("bad", "-1")), id) }.isFailure)
         assertEquals(before, repository.all())
     }
 

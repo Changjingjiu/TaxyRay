@@ -151,13 +151,52 @@ class VisionReceiptParserTest {
     }
 
     @Test fun `unallocated receipt discount is explicit without fabricating negative or changed lines`() {
-        val receipt = VisionReceiptParser.parseArguments(arguments().dropLast(1) + ",\"amount_issue\":\"order_discount_unallocated\"}")
+        val receipt = VisionReceiptParser.parseArguments(arguments().dropLast(1) +
+            """, "declared_total":"12.26", "order_discount":{"amount":"0.04","evidence":"优惠 0.04"}}""")
         assertEquals("12.30", receipt.items.single().amount)
-        assertEquals(listOf("整单优惠未分摊 请按实际优惠调整各项金额"), receipt.warnings)
+        assertEquals("12.26", receipt.declaredTotal)
+        assertEquals(ReceiptDiscount(4, "优惠 0.04"), receipt.discount)
+        assertTrue(receipt.warnings.isEmpty())
+    }
+
+    @Test fun `discount evidence cannot bypass strict money structure or old protocol rejection`() {
+        for (discount in listOf(
+            """{"amount":"-0.04","evidence":"优惠"}""",
+            """{"amount":"0.001","evidence":"优惠"}""",
+            """{"amount":"1e2","evidence":"优惠"}""",
+            """{"amount":"0.04","evidence":""}""",
+            """{"amount":"0.04"}""",
+            """{"amount":"0.04","evidence":"优惠","extra":1}""",
+            """{"amount":"0.04","amount":"0.05","evidence":"优惠"}""",
+            """{"amount":"99999999990.01","evidence":"优惠"}""",
+        )) assertThrows(VisionException::class.java) {
+            VisionReceiptParser.parseArguments(arguments().dropLast(1) + ",\"order_discount\":$discount}")
+        }
+        assertThrows(VisionException::class.java) {
+            VisionReceiptParser.parseArguments(arguments().dropLast(1) + ",\"amount_issue\":\"order_discount_unallocated\"}")
+        }
+    }
+
+    @Test fun `zero price gifts and full discounts are retained without made up payments`() {
+        val receipt = VisionReceiptParser.parseArguments(arguments(amount = "0").dropLast(1) + ",\"declared_total\":\"0.00\"}")
+        assertEquals("0.00", receipt.items.single().amount)
+        assertEquals("0.00", receipt.declaredTotal)
+        assertEquals(null, receipt.discount)
+    }
+
+    @Test fun `already discounted lines are not discounted again even if AI repeats a discount`() {
+        val receipt = VisionReceiptParser.parseArguments(arguments().dropLast(1) +
+            """, "declared_total":"12.30", "order_discount":{"amount":"1.00","evidence":"会员优惠 1.00"}}""")
+        assertEquals("12.30", receipt.items.single().amount)
+        val draft = io.github.taxray.ReceiptDraft(items = receipt.items, declaredTotal = receipt.declaredTotal!!,
+            receiptDiscount = receipt.discount)
+        assertEquals(null, draft.validationMessage())
+        assertEquals(1230L, draft.calculated().single().breakdown.amountCents)
+        assertThrows(IllegalArgumentException::class.java) { draft.allocateDiscount() }
     }
 
     @Test fun `negative missing ambiguous excessive and nonfinite amounts fail closed`() {
-        for (amount in listOf("-1", "0", "0.001", "\"1,234.56\"", "\"¥12.30\"", "\"1e2\"", "1e2", "100000000", "null", "true", "\"NaN\"", "[]", "{}")) {
+        for (amount in listOf("-1", "0.001", "\"1,234.56\"", "\"¥12.30\"", "\"1e2\"", "1e2", "100000000", "null", "true", "\"NaN\"", "[]", "{}")) {
             assertThrows("amount=$amount", VisionException::class.java) {
                 VisionReceiptParser.parseArguments(arguments(amount = amount))
             }
@@ -188,11 +227,14 @@ class VisionReceiptParserTest {
         }
     }
 
-    @Test fun `declared total mismatch produces warning and does not alter line amounts`() {
+    @Test fun `declared total mismatch stays unallocated and is validated by the live draft`() {
         val receipt = VisionReceiptParser.parseArguments(arguments().dropLast(1) + ",\"declared_total\":\"9.00\"}")
         assertEquals("12.30", receipt.items.single().amount)
         assertEquals("9.00", receipt.declaredTotal)
-        assertTrue(receipt.warnings.any { it.contains("不一致") })
+        assertEquals(null, receipt.discount)
+        val draft = io.github.taxray.ReceiptDraft(items = receipt.items, declaredTotal = receipt.declaredTotal!!)
+        assertTrue(draft.validationMessage()!!.contains("3.30"))
+        assertEquals(null, draft.copy(declaredTotal = "12.30").validationMessage())
     }
 
     @Test fun `exact declared total does not produce mismatch warning`() {
@@ -267,6 +309,9 @@ class VisionReceiptParserTest {
         val schema = body.getValue("tools").jsonArray.single().jsonObject.getValue("function").jsonObject.getValue("parameters").jsonObject
         val properties = schema.getValue("properties").jsonObject
         assertTrue(properties.containsKey("receipt_datetime"))
+        assertFalse(properties.containsKey("amount_issue"))
+        val discount = properties.getValue("order_discount").jsonObject
+        assertEquals(setOf("amount", "evidence"), discount.getValue("required").jsonArray.map { it.jsonPrimitive.content }.toSet())
         val item = properties.getValue("items").jsonObject.getValue("items").jsonObject
         val itemProperties = item.getValue("properties").jsonObject
         assertFalse(itemProperties.containsKey("tax_rate"))

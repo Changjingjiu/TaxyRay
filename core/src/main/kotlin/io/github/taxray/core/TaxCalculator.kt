@@ -90,7 +90,6 @@ object TaxCalculator {
 
     private fun parseAmountCents(input: String, maxCents: Long, label: String): Long {
         val amount = parseDecimal(input, label)
-        require(amount.signum() > 0) { "$label 必须大于 0" }
         require(amount <= BigDecimal.valueOf(maxCents, 2)) {
             "$label 不能超过 ${formatMoney(maxCents)} 元"
         }

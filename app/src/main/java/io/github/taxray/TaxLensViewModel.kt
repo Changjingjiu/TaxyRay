@@ -17,28 +17,6 @@ import java.util.UUID
 import java.time.LocalDateTime
 import java.time.ZoneId
 
-data class ReceiptDraft(
-    val id: String? = null,
-    val storeName: String = "",
-    val timestamp: Long = System.currentTimeMillis(),
-    val items: List<DraftItem> = listOf(DraftItem()),
-    val declaredTotal: String = "",
-    val fromVision: Boolean = false,
-    val warnings: List<String> = emptyList()
-) {
-    fun calculated(): List<CalculatedItem> = TaxCalculator.calculateItems(items)
-    fun validationMessage(): String? = runCatching {
-        require(storeName.length <= 120) { "商户名称不能超过 120 字" }
-        val calculated = calculated()
-        if (declaredTotal.isNotBlank()) {
-            val expected = TaxCalculator.parseReceiptTotal(declaredTotal)
-            require(calculated.sumOf { it.breakdown.amountCents } == expected) {
-                "明细之和与票面实付不一致，请核对折扣、数量和漏项后再入账"
-            }
-        }
-    }.exceptionOrNull()?.message
-}
-
 class TaxLensViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as TaxLensApplication
     private val repository = app.receipts
@@ -92,7 +70,7 @@ class TaxLensViewModel(application: Application) : AndroidViewModel(application)
         val error = draft.validationMessage()
         if (error != null) { notify(error); return }
         work("正在保存账单") {
-            repository.save(draft.storeName, draft.items, draft.id, draft.timestamp)
+            repository.save(draft.storeName, draft.settledItems(), draft.id, draft.timestamp)
             editor = if (continueAdding) ReceiptDraft(storeName = draft.storeName) else null
             notify("已保存到本地账本")
         }
@@ -114,6 +92,7 @@ class TaxLensViewModel(application: Application) : AndroidViewModel(application)
             val timestamp = result.receiptDateTime?.let { LocalDateTime.parse(it).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() }
             editor = ReceiptDraft(storeName = result.storeName, timestamp = timestamp ?: System.currentTimeMillis(),
                 items = result.items, declaredTotal = result.declaredTotal.orEmpty(), fromVision = true,
+                receiptDiscount = result.discount,
                 warnings = result.warnings + if (timestamp == null) listOf("未读到完整消费时间 已用当前时间 可点击修改") else emptyList())
             notify("识别完成 确认金额与税率后即可入账")
         } catch (e: CancellationException) { throw e }

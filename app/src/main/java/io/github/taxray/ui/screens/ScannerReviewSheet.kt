@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import io.github.taxray.ReceiptDraft
 import io.github.taxray.core.DraftItem
+import io.github.taxray.core.TaxBreakdown
 import io.github.taxray.core.TaxCalculator
 import io.github.taxray.ui.components.*
 import java.time.Instant
@@ -39,6 +40,9 @@ fun ScannerReviewSheet(draft: ReceiptDraft, busy: Boolean, onChange: (ReceiptDra
     val motionEnabled = rememberReceiptMotionEnabled()
     val calculated = remember(draft) { runCatching { draft.calculated() }.getOrNull() }
     val error = draft.validationMessage()
+    val allocated = draft.allocationIsCurrent()
+    val paidTotal = runCatching { TaxCalculator.parseReceiptTotal(draft.declaredTotal) }.getOrNull()
+    val displayPaidTotal = if (draft.declaredTotal.isBlank()) calculated?.sumOf { it.breakdown.amountCents } else paidTotal
     val currentBusy by rememberUpdatedState(busy)
     val sheetState = rememberModalBottomSheetState(
         skipPartiallyExpanded = true,
@@ -74,10 +78,8 @@ fun ScannerReviewSheet(draft: ReceiptDraft, busy: Boolean, onChange: (ReceiptDra
                     TextButton(onClick = { showDatePicker = true }, enabled = !busy, contentPadding = PaddingValues(0.dp)) {
                         Icon(Icons.Outlined.CalendarToday, null, Modifier.size(16.dp)); Spacer(Modifier.width(8.dp)); Text("消费时间 ${dateText(draft.timestamp, true)}")
                     }
-                    if (draft.fromVision || draft.declaredTotal.isNotBlank()) {
-                        OutlinedTextField(draft.declaredTotal, { onChange(draft.copy(declaredTotal = it)) }, label = { Text("票面实付合计 请核对") }, supportingText = { Text("商品合计需与票面实付一致\n整单优惠请分配到各商品") }, enabled = !busy, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.fillMaxWidth())
-                    }
                 }
+                item { ReceiptSettlementSection(draft, busy, onChange) }
                 item {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text("商品明细 · ${draft.items.size} 项", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
@@ -90,22 +92,28 @@ fun ScannerReviewSheet(draft: ReceiptDraft, busy: Boolean, onChange: (ReceiptDra
                             Checkbox(item.id in selectedIds, { selectedIds = if (it) selectedIds + item.id else selectedIds - item.id }, enabled = !busy)
                             Text("选择第 ${index + 1} 项", style = MaterialTheme.typography.bodySmall)
                         }
-                        EditableReceiptItem(item, index, busy, motionEnabled, onChange = { value -> onChange(draft.copy(items = draft.items.map { if (it.id == value.id) value else it })) }, onDelete = { onChange(draft.copy(items = draft.items.filterNot { it.id == item.id })) })
+                        EditableReceiptItem(item, index, busy, motionEnabled,
+                            allocatedAmount = if (allocated) calculated?.getOrNull(index)?.breakdown else null,
+                            onChange = { value -> onChange(draft.copy(
+                                items = draft.items.map { if (it.id == value.id) value else it },
+                                appliedDiscount = if (item.amount == value.amount) draft.appliedDiscount else null,
+                            )) },
+                            onDelete = { onChange(draft.copy(items = draft.items.filterNot { it.id == item.id }, appliedDiscount = null)) })
                     }
                 }
                 item {
-                    if (batchMode && selectedIds.isNotEmpty()) OutlinedButton(onClick = { onChange(draft.copy(items = draft.items.filterNot { it.id in selectedIds })); selectedIds = emptySet(); batchMode = false }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                    if (batchMode && selectedIds.isNotEmpty()) OutlinedButton(onClick = { onChange(draft.copy(items = draft.items.filterNot { it.id in selectedIds }, appliedDiscount = null)); selectedIds = emptySet(); batchMode = false }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Outlined.DeleteOutline, null); Text("删除选中的 ${selectedIds.size} 项")
                     }
-                    OutlinedButton(onClick = { onChange(draft.copy(items = draft.items + DraftItem())) }, enabled = !busy && draft.items.size < 1000, modifier = Modifier.fillMaxWidth().testTag("addItem")) { Icon(Icons.Outlined.Add, null); Text("添加商品") }
+                    OutlinedButton(onClick = { onChange(draft.copy(items = draft.items + DraftItem(), appliedDiscount = null)) }, enabled = !busy && draft.items.size < 1000, modifier = Modifier.fillMaxWidth().testTag("addItem")) { Icon(Icons.Outlined.Add, null); Text("添加商品") }
                 }
                 item { TaxRateGuide() }
             }
             Surface(tonalElevation = 1.dp) {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("实付 ${calculated?.sumOf { it.breakdown.amountCents }?.let(::money) ?: "—"}", style = MaterialTheme.typography.bodyMedium)
-                        Text("税额 ${calculated?.sumOf { it.breakdown.taxCents }?.let(::money) ?: "—"}", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium)
+                        Text("实付 ${displayPaidTotal?.let(::money) ?: "—"}", style = MaterialTheme.typography.bodyMedium)
+                        Text("税额 ${calculated?.takeIf { error == null }?.sumOf { it.breakdown.taxCents }?.let(::money) ?: "—"}", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium)
                     }
                     if (error != null && (saveAttempted || draft.items.any { it.amount.isNotEmpty() })) Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -144,10 +152,10 @@ fun ScannerReviewSheet(draft: ReceiptDraft, busy: Boolean, onChange: (ReceiptDra
 }
 
 @Composable
-private fun EditableReceiptItem(item: DraftItem, index: Int, busy: Boolean, motionEnabled: Boolean, onChange: (DraftItem) -> Unit, onDelete: () -> Unit) {
+private fun EditableReceiptItem(item: DraftItem, index: Int, busy: Boolean, motionEnabled: Boolean, allocatedAmount: TaxBreakdown?, onChange: (DraftItem) -> Unit, onDelete: () -> Unit) {
     val focusRequester = remember { FocusRequester() }
     var customSelected by rememberSaveable(item.id) { mutableStateOf(item.ratePercent !in PresetTaxRates) }
-    val amount = runCatching { TaxCalculator.calculate(item.amount, item.ratePercent) }.getOrNull()
+    val amount = allocatedAmount ?: runCatching { TaxCalculator.calculate(item.amount, item.ratePercent) }.getOrNull()
     LaunchedEffect(item.id) { if (item.amount.isBlank()) focusRequester.requestFocus() }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -156,12 +164,14 @@ private fun EditableReceiptItem(item: DraftItem, index: Int, busy: Boolean, moti
             OutlinedTextField(item.name, { if (it.length <= 200) onChange(item.copy(name = it)) }, enabled = !busy, label = { Text("商品名称 选填") }, singleLine = true, modifier = Modifier.weight(1f).testTag("itemName$index"))
             IconButton(onClick = onDelete, enabled = !busy) { Icon(Icons.Outlined.DeleteOutline, "删除第 ${index + 1} 项") }
         }
-        OutlinedTextField(item.amount, { if (it.length <= 14) onChange(item.copy(amount = it)) }, enabled = !busy, label = { Text("折后实付金额") }, prefix = { Text("¥ ") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), isError = item.amount.isNotEmpty() && runCatching { TaxCalculator.calculate(item.amount, "0") }.isFailure, modifier = Modifier.fillMaxWidth().focusRequester(focusRequester).testTag("amount$index"))
+        OutlinedTextField(item.amount, { if (it.length <= 14) onChange(item.copy(amount = it)) }, enabled = !busy, label = { Text(if (allocatedAmount != null) "分摊前金额" else "商品金额") }, prefix = { Text("¥ ") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), isError = item.amount.isNotEmpty() && runCatching { TaxCalculator.calculate(item.amount, "0") }.isFailure, modifier = Modifier.fillMaxWidth().focusRequester(focusRequester).testTag("amount$index"))
         TaxRateSelector(item.ratePercent, customSelected, index, enabled = !busy, motionEnabled = motionEnabled,
             onPreset = { rate -> customSelected = false; onChange(item.copy(ratePercent = rate)) },
             onCustom = { customSelected = true; onChange(item.copy(ratePercent = "")) })
         if (customSelected) OutlinedTextField(item.ratePercent, { if (it.length <= 6) onChange(item.copy(ratePercent = it)) }, label = { Text("自定义税率 0–100%") }, suffix = { Text("%") }, singleLine = true, enabled = !busy, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth().testTag("customRate$index"))
         if (item.categoryReason.isNotBlank()) Text(item.categoryReason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (allocatedAmount != null) Text("分摊后实付 ${money(allocatedAmount.amountCents)}", modifier = Modifier.testTag("allocatedPaid$index"),
+            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
         amount?.let { Text("不含税 ${money(it.preTaxCents)}   ·   税额 ${money(it.taxCents)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
         DashedDivider(Modifier.padding(top = 8.dp))
     }

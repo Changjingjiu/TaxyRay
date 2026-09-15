@@ -20,6 +20,8 @@ class TaxCalculatorTest {
     }
 
     @Test fun zeroAndCustomRatesAreExact() {
+        assertEquals(TaxBreakdown(0, 1300, 0, 0), TaxCalculator.calculate("0.00", "13"))
+        assertEquals(0L, TaxCalculator.parseReceiptTotal("0"))
         assertEquals(TaxBreakdown(1, 0, 1, 0), TaxCalculator.calculate("0.01", "0"))
         assertEquals(TaxBreakdown(10_625, 625, 10_000, 625), TaxCalculator.calculate("106.25", "6.25"))
         assertEquals(TaxBreakdown(10_001, 1, 10_000, 1), TaxCalculator.calculate("100.01", "0.01"))
@@ -94,7 +96,7 @@ class TaxCalculatorTest {
         assertEquals(19_999_999_998L, TaxCalculator.parseReceiptTotal("199999999.98"))
         assertEquals(TaxCalculator.MAX_RECEIPT_AMOUNT_CENTS, TaxCalculator.parseReceiptTotal("99999999990.00"))
         assertEquals(29L, TaxCalculator.parseReceiptTotal(" 0000.29 "))
-        listOf("0", "0.00", "-1", "+1", "", "1.", ".5", "1.001", "1.230", "1e2", "NaN", "1,000",
+        listOf("-1", "+1", "", "1.", ".5", "1.001", "1.230", "1e2", "NaN", "1,000",
             "１２.０", "99999999990.01", "99999999991", "1".repeat(33)).forEach { input ->
             assertThrows("total=$input", IllegalArgumentException::class.java) { TaxCalculator.parseReceiptTotal(input) }
         }
@@ -103,7 +105,7 @@ class TaxCalculatorTest {
     }
 
     @Test fun invalidAmountsAreRejectedInsteadOfRoundedOrCoerced() {
-        listOf("", " ", "0", "0.00", "-1", "+1", ".5", "1.", "1.001", "NaN", "Infinity",
+        listOf("", " ", "-1", "+1", ".5", "1.", "1.001", "NaN", "Infinity",
             "1e2", "1,234.56", "￥12.00", "１２.００", "100000000", "100000000.00", "1".repeat(33))
             .forEach { amount ->
                 assertThrows("amount=$amount", IllegalArgumentException::class.java) {
@@ -163,7 +165,7 @@ class TaxCalculatorTest {
 
     @Test fun malformedStoredBreakdownsAndReceiptsAreRejected() {
         assertThrows(IllegalArgumentException::class.java) { TaxBreakdown(100, 1_300, 89, 12) }
-        assertThrows(IllegalArgumentException::class.java) { TaxBreakdown(0, 0, 0, 0) }
+        assertThrows(IllegalArgumentException::class.java) { TaxBreakdown(-1, 0, -1, 0) }
         assertThrows(IllegalArgumentException::class.java) { TaxBreakdown(100, 10_001, 50, 50) }
         assertThrows(IllegalArgumentException::class.java) { TaxBreakdown(100, 0, -1, 101) }
         assertThrows(IllegalArgumentException::class.java) { Receipt("one", "", 0, emptyList()) }

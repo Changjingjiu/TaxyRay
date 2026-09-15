@@ -19,7 +19,7 @@ data class TaxBreakdown(
     val taxCents: Long,
 ) {
     init {
-        require(amountCents in 1..TaxCalculator.MAX_ITEM_AMOUNT_CENTS) { "实付金额超出支持范围" }
+        require(amountCents in 0..TaxCalculator.MAX_ITEM_AMOUNT_CENTS) { "实付金额超出支持范围" }
         require(taxRateBps in 0..10_000) { "税率必须在 0% 至 100% 之间" }
         require(taxCents in 0..amountCents) { "税额超出实付金额范围" }
         require(preTaxCents == amountCents - taxCents) { "税前金额与税额之和必须等于实付金额" }

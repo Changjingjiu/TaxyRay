@@ -14,6 +14,9 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
+/** Ticket evidence only. Applying any discount still requires an explicit review action. */
+data class ReceiptDiscount(val amountCents: Long, val evidence: String)
+
 data class VisionReceipt(
     val storeName: String,
     val items: List<DraftItem>,
@@ -21,6 +24,7 @@ data class VisionReceipt(
     val warnings: List<String> = emptyList(),
     /** Ticket-local ISO date/time; no time zone or device-clock inference. */
     val receiptDateTime: String? = null,
+    val discount: ReceiptDiscount? = null,
 )
 
 class VisionException(message: String) : IllegalArgumentException(message)
@@ -58,17 +62,18 @@ object VisionReceiptParser {
     private fun parseArgumentsInternal(arguments: String): VisionReceipt {
         require(arguments.length <= 1_500_000)
         val data = parseObject(arguments)
-        require(data.keys.all { it in setOf("store_name", "items", "declared_total", "receipt_datetime", "amount_issue") })
+        require(data.keys.all { it in setOf("store_name", "items", "declared_total", "receipt_datetime", "order_discount") })
         val store = data["store_name"]?.let { string(it, 120) }.orEmpty()
         val items = data["items"] as? JsonArray ?: invalid()
         require(items.isNotEmpty() && items.size <= 1_000)
         val warnings = mutableListOf<String>()
-        data["amount_issue"]?.let {
-            when (string(it, 40)) {
-                "none" -> Unit
-                "order_discount_unallocated" -> warnings += "整单优惠未分摊 请按实际优惠调整各项金额"
-                else -> invalid()
-            }
+        val discount = data["order_discount"]?.takeUnless { it == JsonNull }?.let { value ->
+            val fields = value as? JsonObject ?: invalid()
+            require(fields.keys == setOf("amount", "evidence"))
+            val amount = TaxCalculator.parseReceiptTotal(decimal(fields["amount"]).toPlainString())
+            val evidence = string(fields["evidence"], 120)
+            require(evidence.isNotBlank())
+            ReceiptDiscount(amount, evidence)
         }
         val drafts = items.mapIndexed { index, value ->
             val item = value as? JsonObject ?: invalid()
@@ -111,10 +116,8 @@ object VisionReceiptParser {
         val declared = data["declared_total"]?.takeUnless { it == JsonNull }?.let {
             BigDecimal.valueOf(TaxCalculator.parseReceiptTotal(decimal(it).toPlainString()), 2)
         }
-        val sum = drafts.fold(BigDecimal.ZERO) { total, item -> total + BigDecimal(item.amount) }
-        if (declared != null && sum.compareTo(declared) != 0) {
-            warnings += "商品合计 ${sum.toPlainString()} 与票面总额 ${declared.toPlainString()} 不一致 请检查优惠或漏项"
-        }
+        // Amount differences are rendered from the current draft, not frozen in AI warnings.
+        // Neither a matching discount nor a small difference changes any item automatically.
         val dateTime = data["receipt_datetime"]?.takeUnless { it == JsonNull }?.let {
             val raw = string(it, 40)
             try {
@@ -124,7 +127,7 @@ object VisionReceiptParser {
                 null
             }
         }
-        return VisionReceipt(store, drafts, declared?.toPlainString(), warnings, dateTime)
+        return VisionReceipt(store, drafts, declared?.toPlainString(), warnings, dateTime, discount)
     }
 
     /** Same instant range as ledger validation; the printed year alone is insufficient near UTC boundaries. */
@@ -142,7 +145,7 @@ object VisionReceiptParser {
 
     private fun money(element: JsonElement?): BigDecimal {
         val value = decimal(element)
-        require(value > BigDecimal.ZERO && value <= maxAmount)
+        require(value >= BigDecimal.ZERO && value <= maxAmount)
         // Do not silently round a model's ambiguous/over-precise money into a ledger amount.
         require(value.stripTrailingZeros().scale() <= 2)
         return value.setScale(2)

@@ -198,8 +198,8 @@ fun TaxLensApp(vm: TaxLensViewModel = viewModel()) {
             Text("金额以整数分存储\n单项税额 = 实付 × 税率 ÷ (1 + 税率)\n逐项四舍五入到分 再汇总\n不含税金额 = 实付 − 税额")
             Text("例如 实付 ¥35.00 税率 13%\n税额 ¥4.03 不含税 ¥30.97\n税额占实付 11.51%")
             TaxRateGuide()
-            Text("小票通常不能确认商户身份与优惠\nAI 按商品类别建议税率 品名不清楚时会标明\n可按票据修改金额和税率\n特殊减征规则不能直接用优惠比例替代税率")
-            Text("不含税金额用实付减去已舍入税额\n避免重复舍入产生一分差额\n整单优惠应分配到各项折后实付")
+            Text("小票通常不能确认商户税务身份与税收优惠资格\nAI 按商品类别建议税率 品名不清楚时会标明\n可按票据修改金额和税率\n特殊减征规则不能直接用优惠比例替代税率")
+            Text("不含税金额用实付减去已舍入税额\n避免重复舍入产生一分差额\n整单优惠或抹零可按实付分摊\n按商品金额比例分配 尾差补齐到分 再逐项计税")
             Text("政策核验 2026-09-15\n依据增值税法 实施条例与 2026 年第 9 号和第 10 号公告\n完整来源与计算案例见开源项目文档", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             InformationNote("仅供个人记账与估算\n贡献卡不是发票 完税证明或申报依据")
             TextButton(onClick = { showPolicy = false }) { Text("我知道了") }
