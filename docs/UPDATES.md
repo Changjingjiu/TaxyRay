@@ -1,18 +1,20 @@
 # GitHub 在线更新与发行
 
-应用从 **0.2.0 / versionCode 3** 开始提供在线更新。发行仓库为 [Changjingjiu/TaxLens](https://github.com/Changjingjiu/TaxLens)，设置页以 **TaxyRay** 显示项目链接，Android 应用名称仍为 TaxLens。
+应用与发行仓库统一命名为 **TaxyRay** 当前更新源为 [Changjingjiu/TaxyRay](https://github.com/Changjingjiu/TaxyRay)。
 
 ## 使用流程
 
-设置 → 检查更新 → 下载更新 → 安装更新。首次安装更新可能需要在 Android 系统设置允许 TaxLens 安装应用，返回后继续系统确认。账本通过覆盖安装保留，不需要卸载。
+设置 → 检查更新 → 下载更新 → 安装更新。首次安装更新可能需要在 Android 系统设置允许 TaxyRay 安装应用，返回后继续系统确认。账本通过覆盖安装保留，不需要卸载。
 
-0.1.1 及更早预览版本没有在线更新入口，首次从 [GitHub Releases](https://github.com/Changjingjiu/TaxLens/releases/latest) 下载 APK 覆盖安装。之后可在应用中检查更新。
+**0.2.1 及更早版本升级到 0.2.2 需要从 [GitHub Releases](https://github.com/Changjingjiu/TaxyRay/releases/latest) 下载 APK 覆盖安装一次 不要先卸载。** 旧版更新器固定使用改名前的仓库地址并拒绝 API 重定向 因此不能依靠旧版的检查更新完成这一次改名升级。0.2.2 起使用新仓库地址 后续可在设置中检查更新。
+
+本次仅改变展示名称与更新源 Android 包名 `io.github.taxray` 签名 数据库名称和备份格式标识保持不变 以保留已有安装与数据 不新增兼容分支或迁移逻辑。
 
 只有用户主动操作才联网，没有后台定时检查、静默安装或强制更新。检查失败、GitHub 限流、系统不支持或下载中断会明确显示原因，不能当作“已是最新”。版本比较使用递增整数 `versionCode`，不按版本字符串排序。例如 1.0.5 → 1.1.0 只需新版拥有更大的 versionCode、相同包名和可信签名。
 
 ## 更新协议
 
-独立更新客户端请求公开稳定版 `/repos/Changjingjiu/TaxLens/releases/latest`，不附带 GitHub Token、AI Key、账本或设备标识。解析时拒绝 draft 和 prerelease，并从同一 Release 找到 `update.json` 和其指定的 APK。
+独立更新客户端请求公开稳定版 `/repos/Changjingjiu/TaxyRay/releases/latest`，不附带 GitHub Token、AI Key、账本或设备标识。解析时拒绝 draft 和 prerelease，并从同一 Release 找到 `update.json` 和其指定的 APK。
 
 清单固定包含 `versionCode`、`versionName`、`packageName`、`minSdk`、`apkAssetName`、`apkSize`、`sha256`。整数、字段类型、重复键和大小均严格校验。下载地址必须属于该仓库和发行标签，最多接受三次指定 GitHub CDN HTTPS 跳转。
 
@@ -54,4 +56,4 @@ CI 运行测试与未签名 release 构建，发布签名在维护者环境完�
 - [APK v3 签名与轮换链](https://source.android.com/docs/security/features/apksigning/v3)
 - [PackageInstaller](https://developer.android.com/reference/android/content/pm/PackageInstaller)
 
-构建与测试方式见 [DEVELOPMENT.md](DEVELOPMENT.md) 每次发行的实际验证范围见对应 [Release 说明](https://github.com/Changjingjiu/TaxLens/releases)。
+构建与测试方式见 [DEVELOPMENT.md](DEVELOPMENT.md) 每次发行的实际验证范围见对应 [Release 说明](https://github.com/Changjingjiu/TaxyRay/releases)。

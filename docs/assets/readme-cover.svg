@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
-  <title id="title">TaxyRay 记下消费 看见价格中的税额</title>
+  <title id="title">TaxyRay 接入 AI 读懂小票 看见消费里的税</title>
   <desc id="desc">绿色小票主题封面 以含税113元按13%拆分为例 不含税金额100元 税额估算13元</desc>
   <rect width="1200" height="420" rx="24" fill="#103e32"/>
   <path d="M690 0v420" stroke="#31574c" stroke-dasharray="4 9"/>
@@ -14,12 +14,12 @@
       <path d="M20 17h11m-11 6h8m-8 8 4-4 4 2 4-5" stroke="#a9dfbe" stroke-width="1.8" stroke-linecap="round" fill="none"/>
       <text x="66" y="36" font-size="36" font-weight="650" fill="#f8faf7">TaxyRay</text>
     </g>
-    <text x="58" y="170" font-size="47" font-weight="650" fill="#f8faf7">记下消费</text>
-    <text x="58" y="235" font-size="47" font-weight="650" fill="#a9dfbe">看见价格中的税额</text>
-    <text x="60" y="289" font-size="18" fill="#c3d5cb">你的个人消费账本  留在你的设备</text>
-    <text x="60" y="388" font-size="17" fill="#c3d5cb">离线记账</text>
+    <text x="58" y="170" font-size="47" font-weight="650" fill="#f8faf7">AI 读懂小票</text>
+    <text x="58" y="235" font-size="47" font-weight="650" fill="#a9dfbe">看见消费里的税</text>
+    <text x="60" y="289" font-size="18" fill="#c3d5cb">识别商品与实付金额  自动估算增值税</text>
+    <text x="60" y="388" font-size="17" fill="#c3d5cb">AI 识别</text>
     <circle cx="165" cy="382" r="2" fill="#709689"/>
-    <text x="193" y="388" font-size="17" fill="#c3d5cb">小票识别</text>
+    <text x="193" y="388" font-size="17" fill="#c3d5cb">税额计算</text>
     <circle cx="299" cy="382" r="2" fill="#709689"/>
     <text x="327" y="388" font-size="17" fill="#c3d5cb">贡献卡</text>
     <g transform="translate(754 37)">

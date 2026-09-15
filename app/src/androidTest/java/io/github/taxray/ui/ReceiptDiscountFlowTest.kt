@@ -10,8 +10,8 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.taxray.MainActivity
 import io.github.taxray.ReceiptDraft
-import io.github.taxray.TaxLensApplication
-import io.github.taxray.TaxLensViewModel
+import io.github.taxray.TaxyRayApplication
+import io.github.taxray.TaxyRayViewModel
 import io.github.taxray.core.DraftItem
 import io.github.taxray.core.Receipt
 import io.github.taxray.data.remote.VisionReceiptParser
@@ -29,8 +29,8 @@ import org.junit.runner.RunWith
 class ReceiptDiscountFlowTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
     private val store = "DISCOUNT-TEST-${UUID.randomUUID()}"
-    private val app get() = ApplicationProvider.getApplicationContext<TaxLensApplication>()
-    private val vm get() = ViewModelProvider(compose.activity)[TaxLensViewModel::class.java]
+    private val app get() = ApplicationProvider.getApplicationContext<TaxyRayApplication>()
+    private val vm get() = ViewModelProvider(compose.activity)[TaxyRayViewModel::class.java]
     private var baseline: List<Receipt> = emptyList()
 
     @Before fun baseline() { baseline = runBlocking { app.receipts.all() } }

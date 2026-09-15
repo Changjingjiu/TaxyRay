@@ -44,7 +44,7 @@ import io.github.taxray.core.Receipt
 import io.github.taxray.data.update.UpdateSource
 import io.github.taxray.ui.components.*
 import io.github.taxray.ui.screens.*
-import io.github.taxray.ui.theme.TaxLensTheme
+import io.github.taxray.ui.theme.TaxyRayTheme
 import kotlinx.coroutines.*
 import kotlin.math.ceil
 
@@ -52,12 +52,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { TaxLensTheme { TaxLensApp() } }
+        setContent { TaxyRayTheme { TaxyRayApp() } }
     }
 }
 
 @Composable
-fun TaxLensApp(vm: TaxLensViewModel = viewModel()) {
+fun TaxyRayApp(vm: TaxyRayViewModel = viewModel()) {
     val receipts by vm.receipts.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -143,7 +143,7 @@ fun TaxLensApp(vm: TaxLensViewModel = viewModel()) {
                                 if (vm.settings.modelName.isBlank() || vm.settings.apiKey.isBlank() || vm.settingsError != null) showSetup = true else showScanner = true
                             }, { detailId = it.id }, { tab = 1 })
                             2 -> SettingsScreen(vm.settings, vm.settingsError, vm.busy, vm::saveSettings, vm::testConnection, vm::resetSettings,
-                                { format -> if (format == "json") exportJson.launch("TaxLens-backup.json") else exportCsv.launch("TaxLens-backup.csv") },
+                                { format -> if (format == "json") exportJson.launch("TaxyRay-backup.json") else exportCsv.launch("TaxyRay-backup.csv") },
                                 { importFile.launch(arrayOf("application/json", "text/*", "application/octet-stream")) }, vm::eraseEverything, { showPolicy = true }, onRepository = {
                                     runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/${UpdateSource.REPOSITORY}"))) }
                                         .onFailure { vm.notify("没有可用的浏览器") }
@@ -164,7 +164,7 @@ fun TaxLensApp(vm: TaxLensViewModel = viewModel()) {
     }
     receipts.find { it.id == cardId }?.let { receipt ->
         ContributionSheet(receipt, { cardId = null }, onShare = { bitmap -> shareHelper.share(bitmap) }, onSave = { bitmap ->
-            if (Build.VERSION.SDK_INT >= 29) { shareHelper.saveToGallery(bitmap); vm.notify("贡献卡已保存到相册 Pictures/TaxRay") }
+            if (Build.VERSION.SDK_INT >= 29) { shareHelper.saveToGallery(bitmap); vm.notify("贡献卡已保存到相册 Pictures/TaxyRay") }
             else {
                 pendingImagePath = withContext(Dispatchers.IO) {
                     val directory = context.cacheDir.resolve("share").apply { mkdirs() }
@@ -172,7 +172,7 @@ fun TaxLensApp(vm: TaxLensViewModel = viewModel()) {
                     file.outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) { "图片编码失败" } }
                     file.absolutePath
                 }
-                saveImage.launch("TaxLens-contribution.png")
+                saveImage.launch("TaxyRay-contribution.png")
             }
         }, onError = vm::notify)
     }

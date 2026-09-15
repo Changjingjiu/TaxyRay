@@ -15,7 +15,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SdkSuppress
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.taxray.MainActivity
-import io.github.taxray.TaxLensApplication
+import io.github.taxray.TaxyRayApplication
 import io.github.taxray.core.DraftItem
 import io.github.taxray.core.Receipt
 import io.github.taxray.core.TaxCalculator
@@ -38,7 +38,7 @@ class ContributionExportTest {
     private val storeName = "日常采购"
     private val creationMarker = "$storeName · QA-$runId"
     private var createdReceiptId: String? = null
-    private val app get() = ApplicationProvider.getApplicationContext<TaxLensApplication>()
+    private val app get() = ApplicationProvider.getApplicationContext<TaxyRayApplication>()
     private val resolver get() = app.contentResolver
     private var baseline: List<Receipt> = emptyList()
     private var existingImages: Set<Long> = emptySet()
@@ -177,7 +177,7 @@ class ContributionExportTest {
             newImages.size == 1 && newImages.single().size > 0
         }
         val saved = requireNotNull(observed)
-        assertTrue(saved.name.startsWith("TaxRay-") && saved.name.endsWith(".png"))
+        assertTrue(saved.name.startsWith("TaxyRay-") && saved.name.endsWith(".png"))
         assertEquals("image/png", saved.mimeType)
         val bytes = resolver.openInputStream(saved.uri)!!.use { it.readBytes() }
         assertTrue(bytes.size > 10_000)
@@ -204,7 +204,7 @@ class ContributionExportTest {
             MediaStore.Images.Media.MIME_TYPE, MediaStore.Images.Media.SIZE)
         val selection = "${MediaStore.Images.Media.OWNER_PACKAGE_NAME} = ? AND ${MediaStore.Images.Media.RELATIVE_PATH} = ? AND ${MediaStore.Images.Media.IS_PENDING} = 0"
         return resolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, projection, selection,
-            arrayOf(app.packageName, "Pictures/TaxRay/"), null)?.use { cursor ->
+            arrayOf(app.packageName, "Pictures/TaxyRay/"), null)?.use { cursor ->
             buildList {
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(0)

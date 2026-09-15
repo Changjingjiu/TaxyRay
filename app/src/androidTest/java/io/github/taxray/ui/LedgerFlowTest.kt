@@ -8,7 +8,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.taxray.MainActivity
-import io.github.taxray.TaxLensApplication
+import io.github.taxray.TaxyRayApplication
 import io.github.taxray.core.Receipt
 import io.github.taxray.core.TaxCalculator
 import java.util.UUID
@@ -26,7 +26,7 @@ import org.junit.runner.RunWith
 class LedgerFlowTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
     private val storeName = "UI-TEST-${UUID.randomUUID()}"
-    private val app get() = ApplicationProvider.getApplicationContext<TaxLensApplication>()
+    private val app get() = ApplicationProvider.getApplicationContext<TaxyRayApplication>()
     private var baseline: List<Receipt> = emptyList()
 
     @Before fun rememberExistingData() {

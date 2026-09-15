@@ -1,6 +1,6 @@
 # 安全问题反馈
 
-请通过 [GitHub 私密漏洞报告](https://github.com/Changjingjiu/TaxLens/security/advisories/new) 联系维护者。
+请通过 [GitHub 私密漏洞报告](https://github.com/Changjingjiu/TaxyRay/security/advisories/new) 联系维护者。
 
 涉及密钥泄露、未确认图片上传、跨域重定向、备份解析越界、交易完整性或私有文件访问的问题，请通过上述私密漏洞入口报告。不要把真实 API Key、消费图片或账本放入公开 Issue。
 

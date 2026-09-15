@@ -81,7 +81,7 @@ fun SettingsScreen(settings: ApiSettings, settingsError: String?, busy: Boolean,
             TextButton(onClick = onPolicy) { Text("算法与税率口径") }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Box(Modifier.heightIn(min = 48.dp), contentAlignment = Alignment.Center) {
-                    Text("TaxLens ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("TaxyRay ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 TextButton(onClick = onRepository) {
                     Icon(painterResource(R.drawable.ic_github), null, Modifier.size(18.dp))

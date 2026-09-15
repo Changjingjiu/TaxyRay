@@ -91,7 +91,7 @@ class ReleaseUpdateService(private val client: OkHttpClient = newClient()) {
     }
 
     private suspend fun <T> withResponse(url: HttpUrl, api: Boolean, consume: suspend (Response) -> T): T = coroutineScope {
-        val request = Request.Builder().url(url).header("User-Agent", "TaxLens-Android-Updater")
+        val request = Request.Builder().url(url).header("User-Agent", "TaxyRay-Android-Updater")
             .header("Accept", if (api) "application/vnd.github+json" else "application/octet-stream")
             .apply { if (api) header("X-GitHub-Api-Version", UpdateSource.API_VERSION) }.build()
         val call = client.newCall(request)

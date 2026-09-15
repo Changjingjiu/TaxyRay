@@ -32,7 +32,7 @@ class UpdateMetadataTest {
             UpdateFixtures.release().replace("\"draft\":false", "\"draft\":true"),
             UpdateFixtures.release().replace("\"prerelease\":false", "\"prerelease\":true"),
             UpdateFixtures.release().replace("\"state\":\"uploaded\"", "\"state\":\"new\""),
-            UpdateFixtures.release().replace("Changjingjiu/TaxLens", "other/TaxLens"),
+            UpdateFixtures.release().replace("Changjingjiu/TaxyRay", "other/TaxyRay"),
             UpdateFixtures.release().replace("https://github.com", "http://github.com"),
         )) assertThrows(Exception::class.java) { UpdateMetadata.release(value) }
         val release = UpdateMetadata.release(UpdateFixtures.release())
@@ -63,8 +63,8 @@ class UpdateMetadataTest {
 internal object UpdateFixtures {
     val bytes = "abcde".toByteArray()
     val hash = java.security.MessageDigest.getInstance("SHA-256").digest(bytes).hex()
-    const val apkUrl = "https://github.com/Changjingjiu/TaxLens/releases/download/v0.3.0/release.apk"
-    const val metadataUrl = "https://github.com/Changjingjiu/TaxLens/releases/download/v0.3.0/update.json"
+    const val apkUrl = "https://github.com/Changjingjiu/TaxyRay/releases/download/v0.3.0/release.apk"
+    const val metadataUrl = "https://github.com/Changjingjiu/TaxyRay/releases/download/v0.3.0/update.json"
     fun manifest(size: Long = bytes.size.toLong(), hash: String = this.hash) = """{"versionCode":4,"versionName":"0.3.0","packageName":"io.github.taxray","minSdk":26,"apkAssetName":"release.apk","apkSize":$size,"sha256":"$hash"}"""
     fun release() = """{"draft":false,"prerelease":false,"tag_name":"v0.3.0","published_at":"2026-09-15T00:00:00Z","body":"Synthetic release","assets":[{"state":"uploaded","name":"update.json","size":${manifest().toByteArray().size},"browser_download_url":"$metadataUrl"},{"state":"uploaded","name":"release.apk","size":${bytes.size},"browser_download_url":"$apkUrl","digest":"sha256:$hash"}]}"""
     fun update() = UpdateMetadata.combine(UpdateMetadata.release(release()), UpdateMetadata.manifest(manifest()))

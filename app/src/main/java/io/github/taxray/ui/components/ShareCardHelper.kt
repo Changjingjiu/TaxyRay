@@ -29,9 +29,9 @@ class ShareCardHelper(context: Context) {
     suspend fun saveToGallery(bitmap: Bitmap): Uri = withContext(Dispatchers.IO) {
         check(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) { "此系统版本请使用文件保存选项" }
         val values = ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, "TaxRay-${System.currentTimeMillis()}.png")
+            put(MediaStore.Images.Media.DISPLAY_NAME, "TaxyRay-${System.currentTimeMillis()}.png")
             put(MediaStore.Images.Media.MIME_TYPE, "image/png")
-            put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/TaxRay")
+            put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/TaxyRay")
             put(MediaStore.Images.Media.IS_PENDING, 1)
         }
         val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
@@ -62,7 +62,7 @@ class ShareCardHelper(context: Context) {
         var preparedFile: File? = null
         try {
             val file = withContext(Dispatchers.IO) {
-                val destination = File.createTempFile("TaxRay-", ".png", cacheDirectory("share"))
+                val destination = File.createTempFile("TaxyRay-", ".png", cacheDirectory("share"))
                 preparedFile = destination
                 destination.outputStream().use { writePng(bitmap, it) }
                 destination
@@ -72,12 +72,12 @@ class ShareCardHelper(context: Context) {
                 val send = Intent(Intent.ACTION_SEND).apply {
                     type = "image/png"
                     putExtra(Intent.EXTRA_STREAM, uri)
-                    clipData = ClipData.newRawUri("TaxRay 消费税额估算卡", uri)
+                    clipData = ClipData.newRawUri("TaxyRay 消费税额估算卡", uri)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
                 val chooser = Intent.createChooser(send, "分享消费税额估算卡").apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    clipData = ClipData.newRawUri("TaxRay 消费税额估算卡", uri)
+                    clipData = ClipData.newRawUri("TaxyRay 消费税额估算卡", uri)
                 }
                 appContext.startActivity(chooser)
             }

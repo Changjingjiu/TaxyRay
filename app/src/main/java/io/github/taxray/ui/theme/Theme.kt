@@ -30,7 +30,7 @@ private val DarkColors = darkColorScheme(
 val AmountStyle = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum")
 
 @Composable
-fun TaxLensTheme(content: @Composable () -> Unit) {
+fun TaxyRayTheme(content: @Composable () -> Unit) {
     val typography = Typography(
         headlineLarge = AmountStyle.copy(fontSize = 36.sp, lineHeight = 44.sp),
         headlineSmall = TextStyle(fontSize = 22.sp, lineHeight = 30.sp, fontWeight = FontWeight.SemiBold),

@@ -17,7 +17,7 @@ import io.github.taxray.ReceiptDraft
 import io.github.taxray.core.DraftItem
 import io.github.taxray.ui.components.TaxRateGuide
 import io.github.taxray.ui.screens.ScannerReviewSheet
-import io.github.taxray.ui.theme.TaxLensTheme
+import io.github.taxray.ui.theme.TaxyRayTheme
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -30,7 +30,7 @@ class TaxRateGuideTest {
     @Test fun sixPercentDraftStartsInPresetModeAndCustomSixPointFiveStaysEditable() {
         var draft by mutableStateOf(ReceiptDraft(items = listOf(DraftItem(amount = "106.00", ratePercent = "6"))))
         compose.setContent {
-            TaxLensTheme {
+            TaxyRayTheme {
                 ScannerReviewSheet(draft, busy = false, onChange = { draft = it }, onDismiss = {}, onSave = {})
             }
         }
@@ -48,7 +48,7 @@ class TaxRateGuideTest {
 
     @Test fun guideRowsOpenRepresentativesAndKeepConditionalRateBoundariesVisible() {
         compose.setContent {
-            TaxLensTheme {
+            TaxyRayTheme {
                 Surface(Modifier.fillMaxSize()) {
                     Column(Modifier.verticalScroll(rememberScrollState())) { TaxRateGuide() }
                 }

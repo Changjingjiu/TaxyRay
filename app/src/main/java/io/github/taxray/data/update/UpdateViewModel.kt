@@ -78,11 +78,11 @@ class UpdateViewModel(application: Application, private val saved: SavedStateHan
     fun permissionIntent() = installer.permissionIntent()
     fun awaitPermission() {
         saved["permissionRequested"] = true
-        mutable.update { it.copy(phase = UpdatePhase.WAITING_PERMISSION, message = "请在系统设置中允许 TaxLens 安装更新\n返回后继续") }
+        mutable.update { it.copy(phase = UpdatePhase.WAITING_PERMISSION, message = "请在系统设置中允许 TaxyRay 安装更新\n返回后继续") }
     }
     fun permissionLaunchFailed() {
         saved["permissionRequested"] = false
-        mutable.update { it.copy(phase = UpdatePhase.READY, message = "无法打开系统安装来源设置\n请在系统设置中允许 TaxLens 安装应用后重试") }
+        mutable.update { it.copy(phase = UpdatePhase.READY, message = "无法打开系统安装来源设置\n请在系统设置中允许 TaxyRay 安装应用后重试") }
     }
     fun permissionReturned() {
         if (saved.get<Boolean>("permissionRequested") != true) return

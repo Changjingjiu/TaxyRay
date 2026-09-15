@@ -22,7 +22,7 @@ import io.github.taxray.core.Receipt
 import io.github.taxray.core.TaxCalculator
 import io.github.taxray.ui.screens.DashboardScreen
 import io.github.taxray.ui.screens.ScannerReviewSheet
-import io.github.taxray.ui.theme.TaxLensTheme
+import io.github.taxray.ui.theme.TaxyRayTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -40,7 +40,7 @@ class LedgerInteractionRegressionTest {
         val draft = mutableStateOf(ReceiptDraft(items = listOf(DraftItem(amount = "113.00"))))
         val editorVisible = mutableStateOf(true)
         compose.setContent {
-            TaxLensTheme {
+            TaxyRayTheme {
                 Surface(Modifier.fillMaxSize()) {
                     Column {
                         Button(onClick = { editorVisible.value = true }) { Text("打开录入") }
@@ -86,7 +86,7 @@ class LedgerInteractionRegressionTest {
     @Test fun busyEditorConsumesSystemBackWithoutHidingOrDiscarding() {
         var dismissed = false
         compose.setContent {
-            TaxLensTheme {
+            TaxyRayTheme {
                 ScannerReviewSheet(
                     draft = ReceiptDraft(items = listOf(DraftItem(amount = "113.00"))),
                     busy = true,
@@ -107,7 +107,7 @@ class LedgerInteractionRegressionTest {
         val timestamp = LocalDateTime.of(2125, 11, 29, 18, 42).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
         val draft = mutableStateOf(ReceiptDraft(timestamp = timestamp, items = listOf(DraftItem(amount = "113.00"))))
         compose.setContent {
-            TaxLensTheme {
+            TaxyRayTheme {
                 ScannerReviewSheet(draft.value, busy = false, onChange = { draft.value = it }, onDismiss = {}, onSave = {})
             }
         }
@@ -155,7 +155,7 @@ class LedgerInteractionRegressionTest {
 
     private fun showDashboard(historyOnly: Boolean, receipts: List<Receipt> = emptyList()) {
         compose.setContent {
-            TaxLensTheme {
+            TaxyRayTheme {
                 Surface(Modifier.fillMaxSize()) {
                     DashboardScreen(receipts, historyOnly, busy = false, loadError = null,
                         onAdd = {}, onScan = {}, onDetail = {}, onAll = {})

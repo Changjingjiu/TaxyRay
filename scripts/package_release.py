@@ -16,8 +16,8 @@ parser.add_argument('--out', type=Path, required=True, help='Output directory')
 args = parser.parse_args()
 sdk = Path(os.environ['ANDROID_HOME']) / 'build-tools' / '35.0.0'
 env = os.environ.copy()
-env['TAXLENS_RELEASE_PASSWORD'] = (args.keys / 'store-password.txt').read_text().strip()
-if not env['TAXLENS_RELEASE_PASSWORD']:
+env['TAXYRAY_RELEASE_PASSWORD'] = (args.keys / 'store-password.txt').read_text().strip()
+if not env['TAXYRAY_RELEASE_PASSWORD']:
     raise SystemExit('Release password is empty')
 
 def run(*command):
@@ -43,7 +43,7 @@ def sha256(path):
 
 metadata = info(args.apk)
 args.out.mkdir(parents=True, exist_ok=True)
-result = args.out / f"TaxLens-{metadata['versionName']}.apk"
+result = args.out / f"TaxyRay-{metadata['versionName']}.apk"
 if result.exists():
     raise SystemExit('Output APK already exists  use a new output directory')
 with tempfile.TemporaryDirectory() as work:
@@ -52,7 +52,7 @@ with tempfile.TemporaryDirectory() as work:
     run(sdk / 'apksigner', 'sign', '--ks', args.keys / 'preview.keystore',
         '--ks-key-alias', 'androiddebugkey', '--ks-pass', 'pass:android',
         '--next-signer', '--ks', args.keys / 'release.jks', '--ks-key-alias', 'taxlens-release',
-        '--ks-pass', 'env:TAXLENS_RELEASE_PASSWORD', '--key-pass', 'env:TAXLENS_RELEASE_PASSWORD',
+        '--ks-pass', 'env:TAXYRAY_RELEASE_PASSWORD', '--key-pass', 'env:TAXYRAY_RELEASE_PASSWORD',
         '--lineage', args.keys / 'signing-lineage.bin', '--rotation-min-sdk-version', '33',
         '--out', result, aligned)
 verification = run(sdk / 'apksigner', 'verify', '--verbose', '--print-certs', result)

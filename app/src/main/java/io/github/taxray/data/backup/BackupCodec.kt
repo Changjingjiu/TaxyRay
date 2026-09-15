@@ -40,9 +40,9 @@ object BackupCodec {
         val document = try {
             json.decodeFromString<BackupDocument>(normalized)
         } catch (error: IllegalArgumentException) {
-            throw IllegalArgumentException("JSON 备份格式无效，请选择 TaxRay 导出的完整备份", error)
+            throw IllegalArgumentException("JSON 备份格式无效，请选择 TaxyRay 导出的完整备份", error)
         }
-        require(document.format == FORMAT) { "不是 TaxRay 账本备份" }
+        require(document.format == FORMAT) { "不是 TaxyRay 账本备份" }
         require(document.version == VERSION) { "不支持备份版本 ${document.version}，当前仅支持版本 1" }
         require(document.receipts.size <= ReceiptValidation.MAX_RECEIPTS) { "单次最多导入 10000 张账单" }
         return document.receipts.map { it.toReceipt() }.also(::validateDuplicateIds)
@@ -84,7 +84,7 @@ object BackupCodec {
     fun fromCsv(text: String): List<Receipt> {
         validateInputSize(text)
         val rows = parseCsv(text.removePrefix("\uFEFF"))
-        require(rows.isNotEmpty() && rows.first() == csvHeader) { "CSV 表头不匹配，请选择 TaxRay 版本 1 备份" }
+        require(rows.isNotEmpty() && rows.first() == csvHeader) { "CSV 表头不匹配，请选择 TaxyRay 版本 1 备份" }
         val groups = linkedMapOf<String, MutableList<CsvItem>>()
         rows.drop(1).forEachIndexed { index, row ->
             val rowNumber = index + 2

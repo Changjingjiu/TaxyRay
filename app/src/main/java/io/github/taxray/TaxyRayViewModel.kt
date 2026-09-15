@@ -17,8 +17,8 @@ import java.util.UUID
 import java.time.LocalDateTime
 import java.time.ZoneId
 
-class TaxLensViewModel(application: Application) : AndroidViewModel(application) {
-    private val app = application as TaxLensApplication
+class TaxyRayViewModel(application: Application) : AndroidViewModel(application) {
+    private val app = application as TaxyRayApplication
     private val repository = app.receipts
     private val service = VisionAgentService()
     private val notices = Channel<String>(Channel.BUFFERED)

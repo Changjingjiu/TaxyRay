@@ -6,7 +6,7 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 object UpdateSource {
-    const val REPOSITORY = "Changjingjiu/TaxLens"
+    const val REPOSITORY = "Changjingjiu/TaxyRay"
     const val PROJECT_LABEL = "TaxyRay"
     const val API_VERSION = "2026-03-10"
     const val MAX_APK_BYTES = 128L * 1024 * 1024

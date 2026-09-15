@@ -31,7 +31,7 @@ adb -s YOUR_TEST_DEVICE install -r app/build/outputs/apk/debug/app-debug.apk
 
 仪器测试只在专用测试设备或模拟器上执行。Gradle 会安装和卸载测试应用，不要使用保存真实账本的设备，也不要在连接多台设备时无目标地运行测试。
 
-[GitHub Actions](https://github.com/Changjingjiu/TaxLens/actions/workflows/android.yml) 运行 JVM 测试、lint、构建以及 API 35 模拟器测试。每次发行的具体结果与实际设备验证范围记录在 [Release 说明](https://github.com/Changjingjiu/TaxLens/releases)。
+[GitHub Actions](https://github.com/Changjingjiu/TaxyRay/actions/workflows/android.yml) 运行 JVM 测试、lint、构建以及 API 35 模拟器测试。每次发行的具体结果与实际设备验证范围记录在 [Release 说明](https://github.com/Changjingjiu/TaxyRay/releases)。
 
 界面截图不能替代交互验证。真实小票识别、不同厂商的系统安装与分享、物理震动手感仍须在对应设备上检查。
 
