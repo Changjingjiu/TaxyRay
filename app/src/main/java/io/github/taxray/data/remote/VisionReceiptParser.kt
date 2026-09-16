@@ -13,9 +13,16 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.intOrNull
 
 /** Ticket evidence only. Applying any discount still requires an explicit review action. */
 data class ReceiptDiscount(val amountCents: Long, val evidence: String)
+
+enum class PaymentStatus(val wire: String) {
+    PAID("paid"), UNPAID("unpaid"), UNKNOWN("unknown");
+}
+
+data class VisionBatch(val receipts: List<VisionReceipt>, val warnings: List<String> = emptyList())
 
 data class VisionReceipt(
     val storeName: String,
@@ -25,26 +32,35 @@ data class VisionReceipt(
     /** Ticket-local ISO date/time; no time zone or device-clock inference. */
     val receiptDateTime: String? = null,
     val discount: ReceiptDiscount? = null,
+    val paymentStatus: PaymentStatus = PaymentStatus.UNKNOWN,
+    val paymentEvidence: String? = null,
+    /** One-based positions in the image batch; evidence is retained only in the review draft. */
+    val sourceImageIndices: List<Int> = emptyList(),
 )
 
 class VisionException(message: String) : IllegalArgumentException(message)
 
 /** Pure parser: the response is untrusted input and this class has no database access. */
 object VisionReceiptParser {
-    const val FUNCTION_NAME = "parse_receipt_tax_items"
+    const val FUNCTION_NAME = "parse_bill_batch"
     const val MAX_RESPONSE_BYTES = 2_000_000L
+    const val MAX_RECEIPTS = 30
+    const val MAX_ITEMS = 1_000
+    const val MAX_WARNINGS = 30
     private const val INVALID_RESPONSE = "模型返回的结构或金额无效，未写入账本。请重新识别或手动录入。"
     private val decimalPattern = Regex("(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?")
     private val maxAmount = BigDecimal("99999999.99")
     private val json = Json { isLenient = false; allowSpecialFloatingPointValues = false }
 
-    fun parseResponse(response: String): VisionReceipt = guarded {
+    fun parseResponse(response: String, sourceImageCount: Int = ReceiptImageBatch.MAX_IMAGES): VisionBatch = guarded {
         require(response.length <= MAX_RESPONSE_BYTES)
         val root = parseObject(response)
         val choices = root["choices"] as? JsonArray ?: invalid()
         require(choices.size == 1)
         val choice = choices.single() as? JsonObject ?: invalid()
-        require(string(choice["finish_reason"], 32) == "tool_calls")
+        val finish = string(choice["finish_reason"], 32)
+        if (finish == "length") throw VisionException("账单识别结果达到输出上限，未生成完整草稿。请减少图片或订单数量后重试。")
+        require(finish == "tool_calls")
         val message = choice["message"] as? JsonObject ?: invalid()
         require(message["refusal"] == null || message["refusal"] == JsonNull)
         val calls = message["tool_calls"] as? JsonArray ?: invalid()
@@ -54,27 +70,57 @@ object VisionReceiptParser {
         val function = call["function"] as? JsonObject ?: invalid()
         require(string(function["name"], 100) == FUNCTION_NAME)
         val arguments = string(function["arguments"], 1_500_000, allowControls = true)
-        parseArgumentsInternal(arguments)
+        parseArgumentsInternal(arguments, sourceImageCount)
     }
 
-    fun parseArguments(arguments: String): VisionReceipt = guarded { parseArgumentsInternal(arguments) }
+    fun parseArguments(arguments: String, sourceImageCount: Int = ReceiptImageBatch.MAX_IMAGES): VisionBatch =
+        guarded { parseArgumentsInternal(arguments, sourceImageCount) }
 
-    private fun parseArgumentsInternal(arguments: String): VisionReceipt {
+    private fun parseArgumentsInternal(arguments: String, sourceImageCount: Int): VisionBatch {
         require(arguments.length <= 1_500_000)
+        require(sourceImageCount in 1..ReceiptImageBatch.MAX_IMAGES)
         val data = parseObject(arguments)
-        require(data.keys.all { it in setOf("store_name", "items", "declared_total", "receipt_datetime", "order_discount", "input_issue") })
-        val warnings = mutableListOf<String>()
-        data["input_issue"]?.let { issue ->
-            when (string(issue, 32)) {
-                "multiple_receipts" -> throw VisionException("照片包含不同账单 请分开识别 每次选择同一张小票的照片")
-                "unreadable" -> throw VisionException("商品明细看不清 请重新拍摄或选择更清晰的照片")
-                "unclear_overlap" -> warnings += "部分照片重叠不清 请检查是否重复列入了同一行商品"
-                else -> invalid()
-            }
+        require(data.keys == setOf("receipts", "warnings"))
+        val receipts = data["receipts"] as? JsonArray ?: invalid()
+        require(receipts.size <= MAX_RECEIPTS)
+        val warnings = warningList(data["warnings"])
+        require(receipts.isNotEmpty() || warnings.isNotEmpty())
+        var itemCount = 0
+        val parsed = receipts.map { value ->
+            val receipt = value as? JsonObject ?: invalid()
+            val items = receipt["items"] as? JsonArray ?: invalid()
+            itemCount += items.size
+            require(itemCount <= MAX_ITEMS)
+            parseReceipt(receipt, sourceImageCount)
         }
+        return VisionBatch(parsed, warnings)
+    }
+
+    private fun parseReceipt(data: JsonObject, sourceImageCount: Int): VisionReceipt {
+        require(data.keys.all { it in setOf("store_name", "items", "declared_total", "receipt_datetime", "order_discount", "warnings", "payment_status", "payment_evidence", "source_image_indices") })
+        require(data.containsKey("declared_total"))
+        val warnings = warningList(data["warnings"]).toMutableList()
+        val proposedStatus = PaymentStatus.entries.singleOrNull { it.wire == string(data["payment_status"], 16) } ?: invalid()
+        val paymentEvidence = string(data["payment_evidence"], 200).takeIf { it.isNotBlank() }
+        require(proposedStatus == PaymentStatus.UNKNOWN || paymentEvidence != null)
+        // A model must never turn an explicitly future payment into paid expenditure.
+        val paymentStatus = if (paymentEvidence != null && listOf("确认收货后自动付款", "待付款", "尚未付款", "未支付", "未付款")
+                .any(paymentEvidence::contains)) PaymentStatus.UNPAID else proposedStatus
+        if (paymentStatus == PaymentStatus.UNKNOWN) warnings += "付款状态不明确 请核对是否已付款后再入账"
+        if (paymentStatus == PaymentStatus.UNPAID) warnings += "订单尚未付款 不应作为已支付消费入账"
+        val sources = data["source_image_indices"] as? JsonArray ?: invalid()
+        require(sources.isNotEmpty() && sources.size <= sourceImageCount)
+        val sourceIndices = sources.map { element ->
+            val primitive = element as? JsonPrimitive ?: invalid()
+            require(!primitive.isString)
+            val index = primitive.intOrNull ?: invalid()
+            require(index in 1..sourceImageCount)
+            index
+        }
+        require(sourceIndices.distinct().size == sourceIndices.size)
         val store = data["store_name"]?.let { string(it, 120) }.orEmpty()
         val items = data["items"] as? JsonArray ?: invalid()
-        require(items.isNotEmpty() && items.size <= 1_000)
+        require(items.isNotEmpty() && items.size <= MAX_ITEMS)
         val discount = data["order_discount"]?.takeUnless { it == JsonNull }?.let { value ->
             val fields = value as? JsonObject ?: invalid()
             require(fields.keys == setOf("amount", "evidence"))
@@ -131,11 +177,18 @@ object VisionReceiptParser {
             try {
                 validateReceiptDateTime(raw, ZoneId.systemDefault())
             } catch (_: Exception) {
-                warnings += "票面时间无效 可在入账前修改消费时间"
+                warnings += "账单时间无效 可在入账前修改消费时间"
                 null
             }
         }
-        return VisionReceipt(store, drafts, declared?.toPlainString(), warnings, dateTime, discount)
+        return VisionReceipt(store, drafts, declared?.toPlainString(), warnings, dateTime, discount,
+            paymentStatus, paymentEvidence, sourceIndices)
+    }
+
+    private fun warningList(element: JsonElement?): List<String> {
+        val warnings = element as? JsonArray ?: invalid()
+        require(warnings.size <= MAX_WARNINGS)
+        return warnings.map { string(it, 200).also { warning -> require(warning.isNotBlank()) } }
     }
 
     /** Same instant range as ledger validation; the printed year alone is insufficient near UTC boundaries. */

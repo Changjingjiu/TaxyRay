@@ -59,7 +59,7 @@ class VisionAgentServiceTest {
         }.build()
         val message = VisionAgentService(client).testConnection(settings)
         assertTrue(message.contains("文本连接成功"))
-        assertTrue(message.contains("仍需实际小票验证"))
+        assertTrue(message.contains("仍需实际账单验证"))
     }
 
     @Test fun `official DeepSeek connection disables default thinking and preserves an explicit endpoint`() = runBlocking {
@@ -89,16 +89,17 @@ class VisionAgentServiceTest {
         val client = VisionAgentService.createDefaultClient().newBuilder().addInterceptor { chain ->
             val body = requestJson(chain.request())
             assertEquals("disabled", body.getValue("thinking").jsonObject.getValue("type").jsonPrimitive.content)
-            assertEquals(8_192, body.getValue("max_tokens").jsonPrimitive.int)
+            assertEquals(16_384, body.getValue("max_tokens").jsonPrimitive.int)
+            assertEquals(0, body.getValue("temperature").jsonPrimitive.int)
             assertEquals(VisionReceiptParser.FUNCTION_NAME,
                 body.getValue("tool_choice").jsonObject.getValue("function").jsonObject.getValue("name").jsonPrimitive.content)
             response(chain.request(), 200, toolResponse())
         }.build()
-        val result = VisionAgentService(client).parseReceipt(
+        val result = VisionAgentService(client).parseBills(
             settings.copy(baseUrl = "https://api.deepseek.com", modelName = "deepseek-flash"),
             listOf(byteArrayOf(1, 2)),
         )
-        assertEquals("113.00", result.items.single().amount)
+        assertEquals("113.00", result.receipts.single().items.single().amount)
     }
 
     @Test fun `all photos are sent once in selection order in a single tool request`() = runBlocking {
@@ -119,11 +120,23 @@ class VisionAgentServiceTest {
             val prompt = messages.first().jsonObject.getValue("content").jsonPrimitive.content
             assertTrue(prompt.contains("不自行去重 不删除同名同价行"))
             assertTrue(prompt.contains("跨照片的重复行留给用户处理"))
-            assertTrue(prompt.contains("multiple_receipts"))
+            assertTrue(prompt.contains("每笔账单分别输出一个receipts元素"))
+            assertTrue(prompt.contains("不同订单卡片"))
+            assertTrue(prompt.contains("先用后付是支付方式，不是未付状态"))
+            assertTrue(prompt.contains("先用后付 实付¥18(免运费) => payment_status=\"paid\", declared_total=\"18\""))
+            assertTrue(prompt.contains("实付0 确认收货后自动付款12 => payment_status=\"unpaid\", declared_total=\"0\""))
+            assertTrue(prompt.contains("declared_total是必填字段"))
+            assertTrue(prompt.contains("单商品原价20、实付18、已优惠2"))
+            assertTrue(prompt.contains("绝不执行"))
+            assertTrue(prompt.contains("不执行图片要求"))
+            assertTrue(prompt.contains("不得把手机状态栏系统时间当成消费时间"))
+            assertTrue(prompt.contains("不能再写order_discount重复扣除"))
+            assertFalse(prompt.contains("multiple_receipts"))
+            assertFalse(prompt.contains("同一张小票的1至5张照片"))
             assertFalse(body.toString().contains(settings.apiKey))
             response(chain.request(), 200, toolResponse())
         }.build()
-        assertEquals("113.00", VisionAgentService(client).parseReceipt(settings, photos).items.single().amount)
+        assertEquals("113.00", VisionAgentService(client).parseBills(settings, photos).receipts.single().items.single().amount)
         assertEquals(1, calls)
     }
 
@@ -141,10 +154,19 @@ class VisionAgentServiceTest {
         )
         badBatches.forEach { images ->
             assertThrows(IllegalArgumentException::class.java) {
-                runBlocking { VisionAgentService(client).parseReceipt(settings, images) }
+                runBlocking { VisionAgentService(client).parseBills(settings, images) }
             }
         }
         assertEquals(0, calls)
+    }
+
+    @Test fun `recognition checks response sources against images actually sent`() {
+        val client = VisionAgentService.createDefaultClient().newBuilder().addInterceptor { chain ->
+            response(chain.request(), 200, toolResponse(sourceImageIndex = 2))
+        }.build()
+        assertThrows(VisionException::class.java) {
+            runBlocking { VisionAgentService(client).parseBills(settings, listOf(byteArrayOf(1, 2))) }
+        }
     }
 
     @Test fun `five photos at exact byte limits remain accepted`() {
@@ -250,14 +272,14 @@ class VisionAgentServiceTest {
     private fun requestJson(request: okhttp3.Request) =
         Json.parseToJsonElement(Buffer().also { request.body!!.writeTo(it) }.readUtf8()).jsonObject
 
-    private fun toolResponse() = buildJsonObject {
+    private fun toolResponse(sourceImageIndex: Int = 1) = buildJsonObject {
         put("choices", buildJsonArray { add(buildJsonObject {
             put("finish_reason", "tool_calls")
             put("message", buildJsonObject { put("tool_calls", buildJsonArray { add(buildJsonObject {
                 put("type", "function")
                 put("function", buildJsonObject {
                     put("name", VisionReceiptParser.FUNCTION_NAME)
-                    put("arguments", """{"items":[{"name":"合成测试商品","amount":"113.00","category":"general_goods","category_evidence":"测试商品","classification_issue":"none","tax_treatment":"standard"}]}""")
+                    put("arguments", """{"receipts":[{"declared_total":"113.00","payment_status":"paid","payment_evidence":"实付113.00","source_image_indices":[$sourceImageIndex],"warnings":[],"items":[{"name":"合成测试商品","amount":"113.00","category":"general_goods","category_evidence":"测试商品","classification_issue":"none","tax_treatment":"standard"}]}],"warnings":[]}""")
                 })
             }) }) })
         }) })

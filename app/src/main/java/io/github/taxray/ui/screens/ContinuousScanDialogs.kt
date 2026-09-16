@@ -21,45 +21,6 @@ private val ScanDialogProperties = DialogProperties(
     dismissOnClickOutside = false,
 )
 
-/** Recognition stays a draft until the caller opens review and the user confirms it. */
-@Composable
-fun ScanRoundCompleteDialog(
-    roundCount: Int,
-    itemCount: Int,
-    busy: Boolean,
-    onContinue: () -> Unit,
-    onFinish: () -> Unit,
-    onDiscard: () -> Unit,
-) {
-    var discarding by rememberSaveable { mutableStateOf(false) }
-    if (discarding) {
-        DiscardScanDialog(busy, onKeep = { discarding = false }, onDiscard = onDiscard)
-        return
-    }
-    AlertDialog(
-        onDismissRequest = {},
-        properties = ScanDialogProperties,
-        title = { Text("继续录入吗") },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("已识别 $roundCount 次  共 $itemCount 项")
-                Text("还有商品可以继续拍摄\n完成后统一核对入账",
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        },
-        confirmButton = {
-            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onContinue, enabled = !busy,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("continueScanRound")) { Text("继续拍照") }
-                OutlinedButton(onClick = onFinish, enabled = !busy,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("finishScanRounds")) { Text("结束并核对") }
-                TextButton(onClick = { discarding = true }, enabled = !busy,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("放弃本次录入") }
-            }
-        },
-    )
-}
-
 /** groupIndex is zero based. Merely selecting a row never removes any draft item. */
 @Composable
 fun DuplicateItemsDialog(
@@ -138,14 +99,14 @@ fun ScanRecognitionFailureDialog(
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(message, style = MaterialTheme.typography.bodyMedium)
-                if (hasPrevious) Text("前面识别的内容还在 可以继续拍照或先核对",
+                if (hasPrevious) Text("前面识别的内容还在 可以重新选图或先核对",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
         confirmButton = {
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = onRetry, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                    .testTag("retryScanRound")) { Text("重试拍照") }
+                    .testTag("retryScanRound")) { Text("重新选图") }
                 if (hasPrevious) OutlinedButton(onClick = onFinish,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("reviewPreviousScanRounds")) { Text("核对已有内容") }
                 TextButton(onClick = { discarding = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("放弃本次录入") }
@@ -160,7 +121,7 @@ private fun DiscardScanDialog(busy: Boolean, onKeep: () -> Unit, onDiscard: () -
         onDismissRequest = {},
         properties = ScanDialogProperties,
         title = { Text("放弃本次录入？") },
-        text = { Text("本次识别的内容还未入账 放弃后不会保存") },
+        text = { Text("未入账的识别草稿将被放弃\n已经确认入账的账单会保留") },
         confirmButton = {
             TextButton(onClick = onDiscard, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp),
                 colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("确认放弃") }

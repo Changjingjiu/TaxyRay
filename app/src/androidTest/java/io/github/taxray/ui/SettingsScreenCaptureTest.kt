@@ -48,7 +48,7 @@ class SettingsScreenCaptureTest {
         assertScreenProtected(true)
 
         compose.activityRule.scenario.recreate()
-        compose.onNodeWithText("小票识别AI").assertExists()
+        compose.onNodeWithText("账单识别AI").assertExists()
         compose.onNodeWithContentDescription("显示密钥").assertExists()
         assertScreenProtected(false)
     }

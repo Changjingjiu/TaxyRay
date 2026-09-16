@@ -18,6 +18,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.geometry.Offset
@@ -68,23 +69,31 @@ fun DashboardScreen(receipts: List<Receipt>, historyOnly: Boolean, busy: Boolean
         if (loadError != null) item { Text(loadError, color = MaterialTheme.colorScheme.error) }
         if (!historyOnly) {
             item {
-                OutlinedCard(shape = RoundedCornerShape(14.dp), colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
-                    Column(Modifier.fillMaxWidth().padding(22.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                OutlinedCard(modifier = Modifier.testTag("dashboardTotals"), shape = RoundedCornerShape(14.dp), colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Text("累计增值税估算", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                             IconButton(onClick = onShareAll, enabled = receipts.isNotEmpty() && !busy,
-                                modifier = Modifier.testTag("shareAllReceipts")) { Icon(Icons.Outlined.Share, "分享累计贡献卡", Modifier.size(20.dp)) }
+                                modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).testTag("shareAllReceipts")) { Icon(Icons.Outlined.Share, "分享累计贡献卡", Modifier.size(20.dp)) }
                         }
                         RollingAmount(totals.second)
+                        Spacer(Modifier.height(12.dp))
                         DashedDivider()
-                        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text("累计消费", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(money(totals.first), style = AmountStyle.copy(fontSize = 16.sp))
-                            }
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text("有效税额占比", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("${TaxCalculator.effectiveRate(totals.second, totals.first)}%", style = AmountStyle.copy(fontSize = 16.sp))
+                        Spacer(Modifier.height(12.dp))
+                        BoxWithConstraints(Modifier.fillMaxWidth()) {
+                            val metricMinWidth = 112.dp * LocalDensity.current.fontScale
+                            val spending = money(totals.first)
+                            val effectiveRate = "${TaxCalculator.effectiveRate(totals.second, totals.first)}%"
+                            if (maxWidth >= metricMinWidth * 2 + 28.dp) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+                                    DashboardMetric("累计消费", spending, Modifier.weight(1f))
+                                    DashboardMetric("有效税额占比", effectiveRate, Modifier.weight(1f))
+                                }
+                            } else {
+                                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    DashboardMetric("累计消费", spending, Modifier.fillMaxWidth())
+                                    DashboardMetric("有效税额占比", effectiveRate, Modifier.fillMaxWidth())
+                                }
                             }
                         }
                     }
@@ -96,7 +105,7 @@ fun DashboardScreen(receipts: List<Receipt>, historyOnly: Boolean, busy: Boolean
                         Icon(Icons.Outlined.Add, null, Modifier.size(19.dp)); Spacer(Modifier.width(6.dp)); Text("记一笔")
                     }
                     OutlinedButton(onClick = onScan, enabled = !busy, modifier = Modifier.weight(1f).heightIn(min = 52.dp), shape = RoundedCornerShape(10.dp)) {
-                        Icon(Icons.Outlined.DocumentScanner, null, Modifier.size(19.dp)); Spacer(Modifier.width(6.dp)); Text("识别小票")
+                        Icon(Icons.Outlined.DocumentScanner, null, Modifier.size(19.dp)); Spacer(Modifier.width(6.dp)); Text("识别账单")
                     }
                 }
             }
@@ -143,6 +152,14 @@ fun DashboardScreen(receipts: List<Receipt>, historyOnly: Boolean, busy: Boolean
             )
         }
     }
+    }
+}
+
+@Composable
+private fun DashboardMetric(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, Modifier.fillMaxWidth(), style = AmountStyle.copy(fontSize = 16.sp))
     }
 }
 

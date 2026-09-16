@@ -13,6 +13,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import io.github.taxray.ReceiptDraft
+import io.github.taxray.data.remote.PaymentStatus
 import io.github.taxray.core.TaxCalculator
 
 @Composable
@@ -23,6 +24,8 @@ fun ReceiptSettlementSection(draft: ReceiptDraft, busy: Boolean, onChange: (Rece
     val paid = runCatching { TaxCalculator.parseReceiptTotal(draft.declaredTotal) }.getOrNull()
     val difference = if (original != null && paid != null) original - paid else null
     val applied = draft.allocationIsCurrent()
+    val paymentReady = !draft.fromVision || draft.paymentStatus == PaymentStatus.PAID ||
+        (draft.paymentConfirmed && paid != null && (draft.paymentStatus != PaymentStatus.UNPAID || paid > 0L))
 
     if (!showTotal) {
         TextButton(onClick = { showTotal = true }, enabled = !busy, contentPadding = PaddingValues(0.dp)) {
@@ -34,7 +37,7 @@ fun ReceiptSettlementSection(draft: ReceiptDraft, busy: Boolean, onChange: (Rece
         OutlinedTextField(
             value = draft.declaredTotal,
             onValueChange = { if (it.length <= 32) onChange(draft.copy(declaredTotal = it, appliedDiscount = null)) },
-            label = { Text(if (draft.fromVision) "票面实付合计" else "整单实际支付") },
+            label = { Text(if (draft.fromVision) "账单实付合计" else "整单实际支付") },
             prefix = { Text("¥ ") },
             supportingText = { Text("单品优惠计入商品金额 整单优惠在这里处理") },
             enabled = !busy,
@@ -66,7 +69,7 @@ fun ReceiptSettlementSection(draft: ReceiptDraft, busy: Boolean, onChange: (Rece
                 Text("整单优惠或抹零按商品金额比例分摊\n单品优惠请直接修改对应商品金额",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 OutlinedButton(
-                    onClick = { onChange(draft.allocateDiscount()) }, enabled = !busy && source != null,
+                    onClick = { onChange(draft.allocateDiscount()) }, enabled = !busy && source != null && paymentReady,
                     modifier = Modifier.fillMaxWidth().testTag("allocateDiscount"),
                 ) { Text("按实付分摊优惠") }
             } else {

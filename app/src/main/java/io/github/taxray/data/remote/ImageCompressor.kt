@@ -82,20 +82,20 @@ class ImageCompressor(context: Context) {
                         }
                     }
                     val edge = max(source.width, source.height)
-                    check(edge > 256) { "图片压缩失败，请裁剪小票后重试。" }
+                    check(edge > 256) { "图片压缩失败，请裁剪账单后重试。" }
                     bitmap = resize(source, (edge * 0.8).roundToInt().coerceAtLeast(256))
                 }
                 @Suppress("UNREACHABLE_CODE")
                 error("Unreachable")
             }
         } catch (_: OutOfMemoryError) {
-            throw IllegalArgumentException("图片过大，内存不足。请裁剪或重新拍摄小票。")
+            throw IllegalArgumentException("图片过大，内存不足。请裁剪或重新拍摄账单。")
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (invalid: IllegalArgumentException) {
             throw invalid
         } catch (_: Exception) {
-            throw IllegalArgumentException("图片读取或压缩失败，请重新选择图片或拍摄小票。")
+            throw IllegalArgumentException("图片读取或压缩失败，请重新选择图片或拍摄账单。")
         } finally {
             bitmap?.takeUnless { it.isRecycled }?.recycle()
         }

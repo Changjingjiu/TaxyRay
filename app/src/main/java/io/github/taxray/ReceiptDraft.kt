@@ -5,6 +5,7 @@ import io.github.taxray.core.DiscountAllocation
 import io.github.taxray.core.DiscountAllocator
 import io.github.taxray.core.DraftItem
 import io.github.taxray.core.TaxCalculator
+import io.github.taxray.data.remote.PaymentStatus
 import io.github.taxray.data.remote.ReceiptDiscount
 
 /** Review-only snapshot. Saved ledger rows contain the final paid amounts. */
@@ -21,10 +22,14 @@ data class ReceiptDraft(
     val receiptDiscount: ReceiptDiscount? = null,
     val appliedDiscount: AppliedDiscount? = null,
     val requireDeclaredTotal: Boolean = false,
+    val paymentStatus: PaymentStatus? = null,
+    val paymentEvidence: String? = null,
+    val paymentConfirmed: Boolean = false,
 ) {
     fun allocateDiscount(): ReceiptDraft {
         val original = TaxCalculator.calculateItems(items).map { it.breakdown.amountCents }
         val paid = TaxCalculator.parseReceiptTotal(declaredTotal)
+        requirePaidAmountForUnpaidOrder(paid)
         require(paid < original.sum()) { "实付应低于商品合计 才需要分摊优惠" }
         return copy(appliedDiscount = AppliedDiscount(items.map { it.id }, DiscountAllocator.allocate(original, paid)))
     }
@@ -48,6 +53,17 @@ data class ReceiptDraft(
 
     fun validationMessage(): String? = runCatching {
         require(storeName.length <= 120) { "商户名称不能超过 120 字" }
+        require(!fromVision || paymentStatus == PaymentStatus.PAID || paymentConfirmed) {
+            if (paymentStatus == PaymentStatus.UNPAID) "识别到待付款订单 请确认已经付款并填写最终实付后再入账"
+            else "付款状态不明确 请确认已经付款后再入账"
+        }
+        if (fromVision && paymentStatus != PaymentStatus.PAID) {
+            require(declaredTotal.isNotBlank()) {
+                if (paymentStatus == PaymentStatus.UNPAID) "待付款订单需填写大于 0 的最终实付后入账"
+                else "付款状态不明确 请填写最终实付后入账"
+            }
+            requirePaidAmountForUnpaidOrder(TaxCalculator.parseReceiptTotal(declaredTotal))
+        }
         require(!requireDeclaredTotal || declaredTotal.isNotBlank()) { "照片中的金额有冲突 请填写最终实付后入账" }
         val total = calculated().sumOf { it.breakdown.amountCents }
         require(receiptDiscount?.amountCents?.let { it > 0 } != true || declaredTotal.isNotBlank()) {
@@ -61,4 +77,10 @@ data class ReceiptDraft(
             }
         }
     }.exceptionOrNull()?.message
+
+    private fun requirePaidAmountForUnpaidOrder(paidCents: Long) {
+        require(!fromVision || paymentStatus != PaymentStatus.UNPAID || paidCents > 0) {
+            "待付款订单需填写大于 0 的最终实付后入账"
+        }
+    }
 }

@@ -14,7 +14,6 @@ import androidx.test.platform.app.InstrumentationRegistry
 import io.github.taxray.core.DraftItem
 import io.github.taxray.ui.screens.DuplicateItemsDialog
 import io.github.taxray.ui.screens.ScanRecognitionFailureDialog
-import io.github.taxray.ui.screens.ScanRoundCompleteDialog
 import io.github.taxray.ui.theme.TaxyRayTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -25,54 +24,6 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class ContinuousScanDialogsTest {
     @get:Rule val compose = createComposeRule()
-
-    @Test fun completedRoundWaitsForChoiceAndBusyDisablesEveryAction() {
-        var busy by mutableStateOf(true)
-        var continued = 0
-        var finished = 0
-        var discarded = 0
-        compose.setContent {
-            TaxyRayTheme {
-                ScanRoundCompleteDialog(2, 18, busy,
-                    onContinue = { continued++ }, onFinish = { finished++ }, onDiscard = { discarded++ })
-            }
-        }
-        compose.onNodeWithText("已识别 2 次  共 18 项").assertIsDisplayed()
-        compose.onNodeWithTag("continueScanRound").assertIsNotEnabled()
-        compose.onNodeWithTag("finishScanRounds").assertIsNotEnabled()
-        compose.onNodeWithText("放弃本次录入").assertIsNotEnabled()
-        assertCannotDismiss("继续录入吗")
-        compose.runOnIdle {
-            assertEquals(0, continued + finished + discarded)
-            busy = false
-        }
-        compose.onNodeWithTag("continueScanRound").assertHeightIsAtLeast(48.dp).performClick()
-        compose.onNodeWithTag("finishScanRounds").assertHeightIsAtLeast(48.dp).performClick()
-        compose.runOnIdle {
-            assertEquals(1, continued)
-            assertEquals(1, finished)
-            assertEquals(0, discarded)
-        }
-    }
-
-    @Test fun discardNeedsSecondConfirmationAndCanReturnToCurrentRound() {
-        var discarded = 0
-        compose.setContent {
-            TaxyRayTheme {
-                ScanRoundCompleteDialog(1, 5, busy = false,
-                    onContinue = {}, onFinish = {}, onDiscard = { discarded++ })
-            }
-        }
-        compose.onNodeWithText("放弃本次录入").performClick()
-        compose.onNodeWithText("放弃本次录入？").assertIsDisplayed()
-        assertCannotDismiss("放弃本次录入？")
-        compose.runOnIdle { assertEquals(0, discarded) }
-        compose.onNodeWithText("继续录入").performClick()
-        compose.onNodeWithTag("continueScanRound").assertIsDisplayed()
-        compose.onNodeWithText("放弃本次录入").performClick()
-        compose.onNodeWithText("确认放弃").performClick()
-        compose.runOnIdle { assertEquals(1, discarded) }
-    }
 
     @Test fun duplicateSelectionDoesNotDeleteUntilExplicitlyConfirmedAndNewGroupResetsSelection() {
         var groupIndex by mutableStateOf(0)

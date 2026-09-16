@@ -6,6 +6,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -18,10 +19,12 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import io.github.taxray.ReceiptDraft
+import io.github.taxray.data.remote.PaymentStatus
 import io.github.taxray.core.DraftItem
 import io.github.taxray.core.TaxBreakdown
 import io.github.taxray.core.TaxCalculator
@@ -31,7 +34,8 @@ import java.time.ZoneId
 import java.time.ZoneOffset
 
 @Composable
-fun ScannerReviewSheet(draft: ReceiptDraft, busy: Boolean, onChange: (ReceiptDraft) -> Unit, onDismiss: () -> Unit, onSave: (Boolean) -> Unit) {
+fun ScannerReviewSheet(draft: ReceiptDraft, busy: Boolean, onChange: (ReceiptDraft) -> Unit, onDismiss: () -> Unit, onSave: (Boolean) -> Unit,
+    returnToBatch: Boolean = false) {
     var confirmDiscard by rememberSaveable { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf(emptySet<String>()) }
@@ -44,32 +48,50 @@ fun ScannerReviewSheet(draft: ReceiptDraft, busy: Boolean, onChange: (ReceiptDra
     val paidTotal = runCatching { TaxCalculator.parseReceiptTotal(draft.declaredTotal) }.getOrNull()
     val displayPaidTotal = if (draft.declaredTotal.isBlank()) calculated?.sumOf { it.breakdown.amountCents } else paidTotal
     val currentBusy by rememberUpdatedState(busy)
+    val currentDismiss by rememberUpdatedState(onDismiss)
+    fun close() { if (!busy) { if (returnToBatch) onDismiss() else confirmDiscard = true } }
     val sheetState = rememberModalBottomSheetState(
         skipPartiallyExpanded = true,
         confirmValueChange = { target ->
             if (target == SheetValue.Hidden) {
-                if (!currentBusy) confirmDiscard = true
+                if (!currentBusy) { if (returnToBatch) currentDismiss() else confirmDiscard = true }
                 false
             } else true
         }
     )
     ModalBottomSheet(
-        onDismissRequest = { if (!busy) confirmDiscard = true },
+        onDismissRequest = ::close,
         sheetState = sheetState,
         // Material 3 1.3.1's default Back path animates hide() before consulting
         // confirmValueChange. Handle Back in the dialog to keep the draft visible.
         properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false)
     ) {
-        BackHandler { if (!busy) confirmDiscard = true }
+        BackHandler(onBack = ::close)
         Column(Modifier.fillMaxWidth().fillMaxHeight(.94f).imePadding().receiptUnfold(motionEnabled)) {
             Column(Modifier.padding(horizontal = 22.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (draft.fromVision) "核对小票" else if (draft.id != null) "编辑账单" else "记一笔消费", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-                    IconButton(onClick = { confirmDiscard = true }, enabled = !busy) { Icon(Icons.Outlined.Close, "关闭录入") }
+                    Text(if (draft.fromVision) "核对账单" else if (draft.id != null) "编辑账单" else "记一笔消费", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                    IconButton(onClick = ::close, enabled = !busy) { Icon(if (returnToBatch) Icons.Outlined.ArrowBack else Icons.Outlined.Close, if (returnToBatch) "返回待核对账单" else "关闭录入") }
                 }
-                Text(if (draft.fromVision) "AI 结果仅供参考 核对后入账" else "输入折后实付金额 逐项拆分价与税", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if (returnToBatch) "核对后逐笔入账 返回列表会保留修改" else if (draft.fromVision) "AI 结果仅供参考 核对后入账" else "输入折后实付金额 逐项拆分价与税", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             LazyColumn(Modifier.weight(1f).clipToBounds(), contentPadding = PaddingValues(22.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                if (draft.fromVision && draft.paymentStatus != PaymentStatus.PAID) item {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        InformationNote(if (draft.paymentStatus == PaymentStatus.UNPAID)
+                            "这笔订单尚未付款 可返回列表跳过\n如果已经付款 请填写最终实付并确认"
+                            else "付款状态不明确 请先核实实际付款金额")
+                        draft.paymentEvidence?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                            .toggleable(value = draft.paymentConfirmed, enabled = !busy, role = Role.Checkbox,
+                                onValueChange = { onChange(draft.copy(paymentConfirmed = it)) })
+                            .testTag("confirmBillPayment"), verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(draft.paymentConfirmed, onCheckedChange = null, enabled = !busy)
+                            Spacer(Modifier.width(10.dp))
+                            Text("我已核实付款状态和最终实付", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
                 if (draft.warnings.isNotEmpty()) item {
                     InformationNote(draft.warnings.take(5).joinToString("\n"))
                 }

@@ -10,6 +10,7 @@ import io.github.taxray.TaxyRayApplication
 import io.github.taxray.TaxyRayViewModel
 import io.github.taxray.core.DraftItem
 import io.github.taxray.core.Receipt
+import io.github.taxray.data.remote.PaymentStatus
 import java.util.UUID
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -72,7 +73,7 @@ class DuplicateReceiptFlowTest {
         // Even an AI-origin draft with an existing ID is an edit, not a new ledger entry.
         compose.runOnIdle {
             vm.edit(original)
-            vm.updateDraft(vm.editor!!.copy(fromVision = true))
+            vm.updateDraft(vm.editor!!.copy(fromVision = true, paymentStatus = PaymentStatus.PAID))
         }
         compose.onNodeWithTag("saveReceipt").performClick()
         awaitSavedCount(2)
@@ -102,7 +103,7 @@ class DuplicateReceiptFlowTest {
     private fun openMatchingDraft() = compose.runOnIdle {
         vm.newReceipt()
         vm.updateDraft(vm.editor!!.copy(storeName = store, timestamp = original.timestamp,
-            items = items(), fromVision = true))
+            items = items(), fromVision = true, paymentStatus = PaymentStatus.PAID))
     }
 
     private fun awaitDuplicateDialog() {

@@ -49,7 +49,7 @@ fun SettingsScreen(settings: ApiSettings, settingsError: String?, busy: Boolean,
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("小票识别AI", style = MaterialTheme.typography.titleMedium)
+            Text("账单识别AI", style = MaterialTheme.typography.titleMedium)
             Text("推荐 DeepSeek V4.1 Flash", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (settingsError != null) Text(settingsError, color = MaterialTheme.colorScheme.error)
             OutlinedTextField(baseUrl, { baseUrl = it.take(2048) }, label = { Text("API 地址") }, placeholder = { Text("https://api.deepseek.com") }, modifier = Modifier.fillMaxWidth(), enabled = !busy, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri), isError = baseUrl.isNotBlank() && endpoint.isFailure)
@@ -70,7 +70,7 @@ fun SettingsScreen(settings: ApiSettings, settingsError: String?, busy: Boolean,
                 Button(onClick = { showKey = false; onSave(value) }, enabled = !busy, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("加密保存") }
                 OutlinedButton(onClick = { onTest(value) }, enabled = !busy && endpoint.isSuccess && model.isNotBlank() && key.isNotBlank(), modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("测试连接") }
             }
-            Text("测试只发送文本 小票确认后上传\nAPI 调用按服务商规则计费", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("测试只发送文本 账单图片确认后上传\nAPI 调用按服务商规则计费", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             TextButton(onClick = { confirmReset = true }, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) { Text("清除 API 配置") }
         }
         HorizontalDivider()

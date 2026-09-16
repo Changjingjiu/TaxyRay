@@ -61,11 +61,11 @@ fun ReceiptImagesSheet(
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().fillMaxHeight(.92f)) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("小票图片", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                Text("账单图片", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
                 Text("${images.size} / ${ReceiptImageBatch.MAX_IMAGES}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, "关闭选图") }
             }
-            Text(if (previousItemCount == 0) "同一张小票可分次识别 相册每轮最多 5 张" else "已有 $previousItemCount 项 继续拍摄这张小票的剩余部分", Modifier.padding(horizontal = 22.dp, vertical = 8.dp),
+            Text(if (previousItemCount == 0) "支持小票、订单截图和电子账单 每次最多 5 张\n多笔订单会分别核对" else "这笔已有 $previousItemCount 项 仅补拍同一笔账单的剩余部分", Modifier.padding(horizontal = 22.dp, vertical = 8.dp),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             LazyColumn(Modifier.weight(1f).testTag("receiptImages"), contentPadding = PaddingValues(horizontal = 22.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (images.isEmpty()) item {
@@ -78,7 +78,7 @@ fun ReceiptImagesSheet(
                     Row(Modifier.fillMaxWidth().testTag("receiptImage$index"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         Box(Modifier.size(width = 84.dp, height = 112.dp), contentAlignment = Alignment.Center) {
                             val preview = previews[uri]
-                            if (preview != null) Image(preview, "第 ${index + 1} 张小票预览", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                            if (preview != null) Image(preview, "第 ${index + 1} 张账单预览", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
                             else Icon(Icons.Outlined.Image, "第 ${index + 1} 张图片", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Column(Modifier.weight(1f)) {

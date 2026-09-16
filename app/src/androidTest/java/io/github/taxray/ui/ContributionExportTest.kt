@@ -77,14 +77,15 @@ class ContributionExportTest {
 
     @Test fun realReceiptExportsCompletePaperAndForestComposeCards() {
         compose.onNodeWithText("记一笔").performScrollTo().performClick()
-        scrollToTag("storeName").performTextReplacement(creationMarker)
+        scrollToTag("storeName", 0).performTextReplacement(creationMarker)
         val rows = listOf(Triple("日用品", "113.00", "13"), Triple("粮食", "109.00", "9"), Triple("零税额记录", "20.00", "0"))
         rows.forEachIndexed { index, (name, amount, rate) ->
-            if (index > 0) scrollToTag("addItem").performClick()
-            scrollToTag("itemName$index").performTextReplacement(name)
-            scrollToTag("amount$index").performTextReplacement(amount)
+            if (index > 0) scrollToTag("addItem", 3 + index).performClick()
+            scrollToTag("itemName$index", 3 + index).performTextReplacement(name)
             hideKeyboard()
-            scrollToTag("rate${rate}_$index").performClick()
+            scrollToTag("amount$index", 3 + index).performTextReplacement(amount)
+            hideKeyboard()
+            scrollToTag("rate${rate}_$index", 3 + index).performClick()
         }
         hideKeyboard()
         compose.onNodeWithText("实付 ¥242.00").assertIsDisplayed()
@@ -109,7 +110,7 @@ class ContributionExportTest {
         compose.onNodeWithText("搜索商户或商品").performTextReplacement(creationMarker)
         hideKeyboard()
         val receiptCard = hasText(creationMarker) and hasClickAction() and !hasSetTextAction()
-        compose.onAllNodes(hasScrollToIndexAction()).onLast().performScrollToNode(receiptCard)
+        compose.onAllNodes(hasScrollToIndexAction()).onLast().performScrollToIndex(1)
         compose.onNode(receiptCard).performClick()
         // The detail is now anchored to this exact ID. Rename only our fixture, so exported
         // examples stay clean even when the user's ledger already contains “日常采购”.
@@ -126,7 +127,7 @@ class ContributionExportTest {
         }
         compose.onNodeWithText("¥242.00").assertIsDisplayed()
         compose.onNodeWithText("¥22.00").assertIsDisplayed()
-        compose.onAllNodes(hasScrollToIndexAction()).onLast().performScrollToNode(hasText("生成贡献卡"))
+        compose.onNodeWithTag("receiptDetailItems").performScrollToIndex(1)
         compose.onNodeWithText("生成贡献卡").performClick()
         compose.onNodeWithText("纸本").assertIsSelected()
         compose.onNodeWithText("纳税人公共贡献记录").assertIsDisplayed()
@@ -260,9 +261,11 @@ class ContributionExportTest {
         }.orEmpty()
     }
 
-    private fun scrollToTag(tag: String): SemanticsNodeInteraction {
-        compose.onAllNodes(hasScrollToIndexAction()).onLast().performScrollToNode(hasTestTag(tag))
-        return compose.onNodeWithTag(tag)
+    private fun scrollToTag(tag: String, index: Int): SemanticsNodeInteraction {
+        // The fixture's row positions are known. Index scrolling avoids Compose 1.7's
+        // off-thread iterative measurement racing the native LazyColumn prefetcher.
+        compose.onAllNodes(hasScrollToIndexAction()).onLast().performScrollToIndex(index)
+        return compose.onNodeWithTag(tag).performScrollTo()
     }
 
     private fun saveScreen(name: String) {

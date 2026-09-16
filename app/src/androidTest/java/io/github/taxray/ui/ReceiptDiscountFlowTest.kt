@@ -14,6 +14,7 @@ import io.github.taxray.TaxyRayApplication
 import io.github.taxray.TaxyRayViewModel
 import io.github.taxray.core.DraftItem
 import io.github.taxray.core.Receipt
+import io.github.taxray.data.remote.PaymentStatus
 import io.github.taxray.data.remote.VisionReceiptParser
 import java.util.UUID
 import kotlinx.coroutines.runBlocking
@@ -45,9 +46,16 @@ class ReceiptDiscountFlowTest {
         val rows = amounts.mapIndexed { index, amount ->
             """{"name":"演示商品${index + 1}","amount":"$amount","category":"agricultural_product","category_evidence":"演示商品","classification_issue":"none","tax_treatment":"standard"}"""
         }.joinToString(",")
-        val parsed = VisionReceiptParser.parseArguments("""{"items":[$rows],"declared_total":"59.20","order_discount":{"amount":"0.04","evidence":"优惠 0.04"}}""")
+        val parsed = VisionReceiptParser.parseArguments("""{
+            "receipts":[{
+                "store_name":"合成测试商店","items":[$rows],"declared_total":"59.20",
+                "receipt_datetime":null,"order_discount":{"amount":"0.04","evidence":"优惠 0.04"},
+                "payment_status":"paid","payment_evidence":"实付59.20","source_image_indices":[1],"warnings":[]
+            }],"warnings":[]
+        }""", sourceImageCount = 1).receipts.single()
         show(ReceiptDraft(storeName = store, items = parsed.items,
-            receiptDiscount = parsed.discount, fromVision = true))
+            receiptDiscount = parsed.discount, fromVision = true,
+            paymentStatus = parsed.paymentStatus, paymentEvidence = parsed.paymentEvidence))
         compose.onNodeWithTag("saveReceipt").performClick()
         val messages = compose.onAllNodesWithText("识别到整单优惠 请先填写最终实付")
         assertTrue(messages.fetchSemanticsNodes().indices.any { messages[it].isDisplayed() })
@@ -88,6 +96,7 @@ class ReceiptDiscountFlowTest {
 
     @Test fun changingAProductClearsAllocationAndSurchargesStayBlocked() {
         show(ReceiptDraft(storeName = store, declaredTotal = "9.99", fromVision = true,
+            paymentStatus = PaymentStatus.PAID,
             items = listOf(DraftItem(amount = "10.00"))))
         tag("allocateDiscount").performClick()
         tag("amount0").performTextReplacement("8.00")
@@ -103,6 +112,7 @@ class ReceiptDiscountFlowTest {
 
     @Test fun fullDiscountKeepsZeroPriceRowsAndZeroTaxInTheLedger() {
         show(ReceiptDraft(storeName = store, declaredTotal = "0.00", fromVision = true,
+            paymentStatus = PaymentStatus.PAID,
             items = listOf(DraftItem(name = "赠品一", amount = "0.01"), DraftItem(name = "赠品二", amount = "0.01"))))
         tag("allocateDiscount").performClick()
         compose.onNodeWithTag("saveReceipt").performClick()

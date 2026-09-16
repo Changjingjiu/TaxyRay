@@ -2,6 +2,7 @@ package io.github.taxray
 
 import io.github.taxray.core.DraftItem
 import io.github.taxray.core.TaxCalculator
+import io.github.taxray.data.remote.PaymentStatus
 import io.github.taxray.data.remote.ReceiptDiscount
 import io.github.taxray.data.remote.VisionReceipt
 import java.time.LocalDateTime
@@ -75,7 +76,7 @@ class ReceiptScanSessionTest {
             .append(round(store = "a 店", date = "2026-09-16T14:02:59"))
         assertEquals("Ａ店", session.draft().storeName)
         assertEquals(LocalDateTime.parse(date).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(), session.draft().timestamp)
-        assertTrue(session.draft().warnings.none { it.contains("票面时间") })
+        assertTrue(session.draft().warnings.none { it.contains("账单时间") })
     }
 
     @Test fun aDifferentMerchantOrPrintedMinuteIsRejectedWithoutChangingEarlierRounds() {
@@ -92,13 +93,13 @@ class ReceiptScanSessionTest {
 
     @Test fun dateAndItemWarningsAreClearAcrossRoundsWithoutRepeatingTheMissingDateHint() {
         val session = ReceiptScanSession(startedAt = 123L)
-            .append(round().copy(warnings = listOf("第 1 项 品名不完整 可补充品名并调整税率", "票面时间无效 可在入账前修改消费时间")))
+            .append(round().copy(warnings = listOf("第 1 项 品名不完整 可补充品名并调整税率", "账单时间无效 可在入账前修改消费时间")))
             .append(round().copy(warnings = listOf("第 1 项 品名不完整 可补充品名并调整税率")))
         val warnings = session.draft().warnings
         assertEquals(3, warnings.size)
         assertTrue(warnings[0].startsWith("第 1 次识别 第 1 项"))
         assertTrue(warnings[1].startsWith("第 2 次识别 第 1 项"))
-        assertEquals(1, warnings.count { it.contains("票面时间") })
+        assertEquals(1, warnings.count { it.contains("账单时间") })
         assertEquals(123L, session.draft().timestamp)
     }
 
@@ -106,17 +107,20 @@ class ReceiptScanSessionTest {
         val item = DraftItem(id = "reused", name = "纸巾", amount = "10.00")
         val inputItems = mutableListOf(item, item)
         val inputWarnings = mutableListOf("第 1 项 可调整税率")
-        val input = round().copy(items = inputItems, warnings = inputWarnings)
+        val sourceImages = mutableListOf(1)
+        val input = round().copy(items = inputItems, warnings = inputWarnings, sourceImageIndices = sourceImages)
         val one = ReceiptScanSession().append(input)
         val two = one.append(input)
         inputItems.clear()
         inputWarnings.clear()
+        sourceImages.clear()
         assertEquals(2, one.items.size)
         assertEquals(4, two.items.size)
         assertEquals(4, two.items.map { it.id }.distinct().size)
         assertTrue(two.items.none { it.id == "reused" })
         assertEquals(one.items, two.items.take(2))
         assertEquals(listOf("第 1 项 可调整税率"), one.rounds.single().warnings)
+        assertEquals(listOf(1), one.rounds.single().sourceImageIndices)
     }
 
     @Test fun explicitDuplicateRemovalKeepsSelectedOriginalsAndDoesNotRewriteTicketMoney() {
@@ -153,6 +157,61 @@ class ReceiptScanSessionTest {
         assertTrue(session.rounds.isEmpty())
     }
 
+    @Test fun paymentEvidenceIsPreservedAndOnlyMatchingStatusesRemainCertain() {
+        PaymentStatus.entries.forEach { status ->
+            val session = ReceiptScanSession()
+                .append(round().copy(paymentStatus = status, paymentEvidence = " 实付 ¥10.00 "))
+                .append(round().copy(paymentStatus = status, paymentEvidence = "实付 ¥10.00"))
+            val draft = session.draft()
+            assertEquals(status, draft.paymentStatus)
+            assertEquals("实付 ¥10.00", draft.paymentEvidence)
+            assertFalse(draft.paymentConfirmed)
+            assertTrue(draft.warnings.none { it.contains("付款状态不一致") })
+        }
+    }
+
+    @Test fun mixedPaymentEvidenceNeverSilentlyPromotesAnOrderToPaid() {
+        listOf(
+            PaymentStatus.PAID to PaymentStatus.UNPAID,
+            PaymentStatus.UNPAID to PaymentStatus.PAID,
+            PaymentStatus.PAID to PaymentStatus.UNKNOWN,
+            PaymentStatus.UNPAID to PaymentStatus.UNKNOWN,
+        ).forEach { (first, second) ->
+            val session = ReceiptScanSession()
+                .append(round().copy(paymentStatus = first, paymentEvidence = "第一张付款凭据"))
+                .append(round().copy(paymentStatus = second, paymentEvidence = "第二张付款凭据"))
+            val draft = session.draft()
+            assertEquals(PaymentStatus.UNKNOWN, draft.paymentStatus)
+            assertEquals("第一张付款凭据；第二张付款凭据", draft.paymentEvidence)
+            assertTrue(draft.warnings.any { it.contains("付款状态不一致") })
+            assertTrue(draft.validationMessage()!!.contains("付款状态不明确"))
+            assertFalse(draft.paymentConfirmed)
+            assertEquals(2, session.items.size)
+        }
+    }
+
+    @Test fun paymentEvidenceHasABoundedLengthAndAbsentDatesUseScanTimeWithAWarning() {
+        val session = ReceiptScanSession(startedAt = 123L)
+            .append(round().copy(paymentEvidence = "甲".repeat(200)))
+            .append(round().copy(paymentEvidence = "乙".repeat(200)))
+            .append(round().copy(paymentEvidence = "丙".repeat(200)))
+        val draft = session.draft()
+        assertTrue(draft.paymentEvidence!!.length <= 600)
+        assertEquals(123L, draft.timestamp)
+        assertEquals(1, draft.warnings.count { it == "未识别到账单时间 已使用本次识别时间 可修改" })
+        assertNull(ReceiptScanSession().append(round().copy(paymentEvidence = " ")).draft().paymentEvidence)
+    }
+
+    @Test fun separateOrdersAtTheSameMerchantRemainIndependentSessions() {
+        val first = ReceiptScanSession().append(round(total = "10.00", date = "2026-09-16T14:02:00"))
+        val second = ReceiptScanSession().append(round(amount = "14.30", total = "14.30", date = "2026-09-16T14:03:00"))
+        assertEquals(1, first.items.size)
+        assertEquals("10.00", first.draft().declaredTotal)
+        assertEquals(1, second.items.size)
+        assertEquals("14.30", second.draft().declaredTotal)
+        assertThrows(IllegalArgumentException::class.java) { first.append(second.rounds.single()) }
+    }
+
     private fun round(
         store: String = "示例商店",
         amount: String = "10.00",
@@ -160,5 +219,5 @@ class ReceiptScanSessionTest {
         date: String? = null,
         discount: ReceiptDiscount? = null,
     ) = VisionReceipt(store, listOf(DraftItem(name = "纸巾", amount = amount)), total,
-        receiptDateTime = date, discount = discount)
+        receiptDateTime = date, discount = discount, paymentStatus = PaymentStatus.PAID)
 }

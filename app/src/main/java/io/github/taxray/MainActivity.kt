@@ -168,10 +168,10 @@ fun TaxyRayApp(vm: TaxyRayViewModel = viewModel()) {
             }
         }
     }
-    fun continueWithCamera() {
-        vm.prepareNextScanRound()
+    fun continueWithImages(supplementId: String? = null) {
+        vm.prepareNextScanRound(supplementId)
+        scannerGeneration++
         showScanner = true
-        launchCamera()
     }
     LaunchedEffect(vm) { vm.messages.collect { snackbarHost.showSnackbar(it) } }
     BackHandler(enabled = tab != 0 && detailId == null && cardId == null && !shareAll && vm.editor == null) { tab = 0 }
@@ -227,7 +227,8 @@ fun TaxyRayApp(vm: TaxyRayViewModel = viewModel()) {
             }
         }
     }
-    vm.editor?.let { draft -> ScannerReviewSheet(draft, vm.busy, vm::updateDraft, vm::closeEditor, vm::saveReceipt) }
+    vm.editor?.let { draft -> ScannerReviewSheet(draft, vm.busy, vm::updateDraft, vm::closeEditor, vm::saveReceipt,
+        returnToBatch = vm.editingScanBillId != null) }
     receipts.find { it.id == detailId }?.let { receipt ->
         ReceiptDetailSheet(receipt, vm.busy, { detailId = null }, { detailId = null; vm.edit(receipt) }, { detailId = null; vm.delete(receipt) }, {
             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -251,10 +252,10 @@ fun TaxyRayApp(vm: TaxyRayViewModel = viewModel()) {
         }, onError = vm::notify)
     }
     if (showUpdate) UpdateDialog(onDismiss = { showUpdate = false })
-    if (showSetup) AlertDialog(onDismissRequest = { showSetup = false }, icon = { Icon(Icons.Outlined.Key, null) }, title = { Text("配置你的小票识别服务") }, text = { Text("填写自己的 API Key 与支持图片识别的模型\n也可使用离线手动记账") }, confirmButton = { TextButton(onClick = { showSetup = false; tab = 2 }) { Text("前往设置") } }, dismissButton = { TextButton(onClick = { showSetup = false; vm.newReceipt() }) { Text("手动记账") } })
+    if (showSetup) AlertDialog(onDismissRequest = { showSetup = false }, icon = { Icon(Icons.Outlined.Key, null) }, title = { Text("配置你的账单识别服务") }, text = { Text("填写自己的 API Key 与支持图片识别的模型\n也可使用离线手动记账") }, confirmButton = { TextButton(onClick = { showSetup = false; tab = 2 }) { Text("前往设置") } }, dismissButton = { TextButton(onClick = { showSetup = false; vm.newReceipt() }) { Text("手动记账") } })
     if (showScanner) ReceiptImagesSheet(imageUris, vm.settings.baseUrl, vm.settings.modelName,
         cameraBusy = cameraPreparing || cameraUri != null,
-        previousItemCount = vm.scanSession?.items?.size ?: 0,
+        previousItemCount = vm.scanBills.find { it.id == vm.supplementBillId }?.draft?.items?.size ?: 0,
         onImagesChanged = { updated ->
             val removed = (imageUris - updated.toSet()).map(Uri::parse)
             imageUris = ArrayList(updated)
@@ -267,13 +268,14 @@ fun TaxyRayApp(vm: TaxyRayViewModel = viewModel()) {
             imageUris = arrayListOf()
             vm.recognize(images)
         }, onDismiss = ::closeImages)
-    if (vm.scanRoundReady) vm.scanSession?.let { session ->
-        ScanRoundCompleteDialog(session.rounds.size, session.items.size, vm.busy,
-            onContinue = ::continueWithCamera, onFinish = vm::finishScan, onDiscard = vm::discardScan)
+    if (vm.scanReviewReady && !vm.busy && vm.editor == null && vm.scanDuplicateReview == null && vm.scanError == null) {
+        BillBatchReviewSheet(vm.scanBills, vm.scanWarnings, vm.busy,
+            onReview = vm::reviewScanBill, onSkip = vm::skipScanBill, onRestore = vm::restoreScanBill,
+            onSupplement = { continueWithImages(it) }, onAddImages = { continueWithImages() }, onFinish = vm::discardScan)
     }
     if (!vm.busy) vm.scanError?.let { message ->
-        ScanRecognitionFailureDialog(message, vm.scanSession?.rounds?.isNotEmpty() == true,
-            onRetry = ::continueWithCamera, onFinish = vm::finishScan, onDiscard = vm::discardScan)
+        ScanRecognitionFailureDialog(message, vm.scanBills.isNotEmpty(),
+            onRetry = { continueWithImages(vm.supplementBillId) }, onFinish = vm::returnToScanReview, onDiscard = vm::discardScan)
     }
     vm.scanDuplicateReview?.let { review ->
         val group = review.groups[review.groupIndex]
