@@ -47,6 +47,11 @@ class ReceiptRepository(private val database: AppDatabase) {
 
     suspend fun delete(id: String) = dao.deleteReceipt(id)
 
+    suspend fun deleteAll(ids: List<String>) = database.withTransaction {
+        // Stay under SQLite's bound-parameter limit even for a large selection.
+        ids.distinct().chunked(500).forEach { dao.deleteReceipts(it) }
+    }
+
     suspend fun all(): List<Receipt> = withContext(Dispatchers.Default) { dao.all().map { it.toReceipt() } }
 
     suspend fun importReceipts(receipts: List<Receipt>): Int {

@@ -1,8 +1,10 @@
 @file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 package io.github.taxray.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,6 +17,9 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.semantics.contentDescription
@@ -33,23 +38,42 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 @Composable
-fun DashboardScreen(receipts: List<Receipt>, historyOnly: Boolean, busy: Boolean, loadError: String?, onAdd: () -> Unit, onScan: () -> Unit, onDetail: (Receipt) -> Unit, onAll: () -> Unit) {
+fun DashboardScreen(receipts: List<Receipt>, historyOnly: Boolean, busy: Boolean, loadError: String?, onAdd: () -> Unit, onScan: () -> Unit, onDetail: (Receipt) -> Unit, onAll: () -> Unit, onShareAll: () -> Unit, onDeleteSelection: (List<Receipt>) -> Unit) {
     var query by rememberSaveable { mutableStateOf("") }
     var recentOnly by rememberSaveable { mutableStateOf(false) }
+    var selectedIds by rememberSaveable(historyOnly) { mutableStateOf(arrayListOf<String>()) }
+    BackHandler(enabled = selectedIds.isNotEmpty()) { selectedIds = arrayListOf() }
+    val haptics = LocalHapticFeedback.current
+    LaunchedEffect(receipts) { selectedIds = ArrayList(selectedIds.filter { id -> receipts.any { it.id == id } }) }
     val totals = remember(receipts) { receipts.sumOf { it.totalAmountCents } to receipts.sumOf { it.totalTaxCents } }
     val cutoff = LocalDate.now().minusDays(29).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
     val visible = remember(receipts, query, recentOnly, historyOnly) {
         if (!historyOnly) receipts.take(5) else receipts.filter { (!recentOnly || it.timestamp >= cutoff) && (query.isBlank() || it.displayStoreName().contains(query, true) || it.items.any { line -> line.name.contains(query, true) }) }
     }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 22.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+    fun toggleSelection(receipt: Receipt) {
+        selectedIds = ArrayList(if (receipt.id in selectedIds) selectedIds - receipt.id else selectedIds + receipt.id)
+    }
+    Column(Modifier.fillMaxSize()) {
+    if (selectedIds.isNotEmpty()) Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
+        FlowRow(Modifier.fillMaxWidth().padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.Center) {
+            TextButton(onClick = { selectedIds = arrayListOf() }, enabled = !busy) { Text("取消选择") }
+            TextButton(onClick = { selectedIds = ArrayList((selectedIds + visible.map { it.id }).distinct()) }, enabled = !busy) { Text("全选当前列表") }
+            TextButton(onClick = { onDeleteSelection(receipts.filter { it.id in selectedIds }) }, enabled = !busy,
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error), modifier = Modifier.testTag("deleteSelectedReceipts")) {
+                Icon(Icons.Outlined.DeleteOutline, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("删除 ${selectedIds.size} 笔")
+            }
+        }
+    }
+    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 22.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         if (loadError != null) item { Text(loadError, color = MaterialTheme.colorScheme.error) }
         if (!historyOnly) {
             item {
                 OutlinedCard(shape = RoundedCornerShape(14.dp), colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
                     Column(Modifier.fillMaxWidth().padding(22.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text("累计增值税估算", style = MaterialTheme.typography.bodyMedium)
-                            Text("CNY", style = AmountStyle.copy(fontSize = 11.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("累计增值税估算", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                            IconButton(onClick = onShareAll, enabled = receipts.isNotEmpty() && !busy,
+                                modifier = Modifier.testTag("shareAllReceipts")) { Icon(Icons.Outlined.Share, "分享累计贡献卡", Modifier.size(20.dp)) }
                         }
                         RollingAmount(totals.second)
                         DashedDivider()
@@ -104,7 +128,10 @@ fun DashboardScreen(receipts: List<Receipt>, historyOnly: Boolean, busy: Boolean
             }
         }
         items(visible, key = { it.id }) { receipt ->
-            ReceiptSummary(receipt, { onDetail(receipt) }, Modifier.animateItem())
+            ReceiptSummary(receipt, selected = receipt.id in selectedIds, selectionMode = selectedIds.isNotEmpty(), enabled = !busy,
+                onClick = { if (selectedIds.isNotEmpty()) toggleSelection(receipt) else onDetail(receipt) },
+                onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); toggleSelection(receipt) },
+                modifier = Modifier.animateItem())
         }
         item {
             Text(
@@ -116,18 +143,24 @@ fun DashboardScreen(receipts: List<Receipt>, historyOnly: Boolean, busy: Boolean
             )
         }
     }
+    }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun ReceiptSummary(receipt: Receipt, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    OutlinedCard(onClick = onClick, modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+private fun ReceiptSummary(receipt: Receipt, selected: Boolean, selectionMode: Boolean, enabled: Boolean, onClick: () -> Unit, onLongClick: () -> Unit, modifier: Modifier = Modifier) {
+    OutlinedCard(modifier = modifier.fillMaxWidth().testTag("receipt-${receipt.id}")
+        .combinedClickable(enabled = enabled, onClickLabel = if (selectionMode) "选择账单" else "查看账单", onLongClickLabel = "选择并删除账单", onClick = onClick, onLongClick = onLongClick),
+        shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
+        colors = CardDefaults.outlinedCardColors(containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text(receipt.displayStoreName(), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text("${dateText(receipt.timestamp)}  ·  ${receipt.items.size} 项", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Icon(Icons.Outlined.ChevronRight, "查看账单明细", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (selectionMode) Checkbox(checked = selected, onCheckedChange = null)
+                else Icon(Icons.Outlined.ChevronRight, "查看账单明细", tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             DashedDivider()
             FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

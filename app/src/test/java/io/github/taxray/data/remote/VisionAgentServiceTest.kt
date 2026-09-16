@@ -2,6 +2,7 @@ package io.github.taxray.data.remote
 
 import io.github.taxray.data.security.ApiSettings
 import java.net.SocketTimeoutException
+import java.util.Base64
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -14,6 +15,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.put
@@ -94,9 +96,61 @@ class VisionAgentServiceTest {
         }.build()
         val result = VisionAgentService(client).parseReceipt(
             settings.copy(baseUrl = "https://api.deepseek.com", modelName = "deepseek-flash"),
-            CompressedReceiptImage(byteArrayOf(1, 2), 1, 1),
+            listOf(byteArrayOf(1, 2)),
         )
         assertEquals("113.00", result.items.single().amount)
+    }
+
+    @Test fun `all photos are sent once in selection order in a single tool request`() = runBlocking {
+        val photos = listOf(byteArrayOf(3, 5, 8), byteArrayOf(2, 4), byteArrayOf(9))
+        var calls = 0
+        val client = VisionAgentService.createDefaultClient().newBuilder().addInterceptor { chain ->
+            calls++
+            val body = requestJson(chain.request())
+            val messages = body.getValue("messages").jsonArray
+            val content = messages[1].jsonObject.getValue("content").jsonArray
+            val sentPhotos = content.filter { it.jsonObject.getValue("type").jsonPrimitive.content == "image_url" }
+                .map { it.jsonObject.getValue("image_url").jsonObject.getValue("url").jsonPrimitive.content }
+            assertEquals(photos.map { "data:image/jpeg;base64,${Base64.getEncoder().encodeToString(it)}" }, sentPhotos)
+            assertEquals(listOf("第 1 张 / 共 3 张", "第 2 张 / 共 3 张", "第 3 张 / 共 3 张"),
+                content.filter { it.jsonObject.getValue("type").jsonPrimitive.content == "text" }
+                    .drop(1).map { it.jsonObject.getValue("text").jsonPrimitive.content })
+            assertEquals(1, body.getValue("tools").jsonArray.size)
+            val prompt = messages.first().jsonObject.getValue("content").jsonPrimitive.content
+            assertTrue(prompt.contains("不能仅凭品名或金额相同去重"))
+            assertTrue(prompt.contains("独立购买行即使品名金额完全相同也分别保留"))
+            assertTrue(prompt.contains("multiple_receipts"))
+            assertFalse(body.toString().contains(settings.apiKey))
+            response(chain.request(), 200, toolResponse())
+        }.build()
+        assertEquals("113.00", VisionAgentService(client).parseReceipt(settings, photos).items.single().amount)
+        assertEquals(1, calls)
+    }
+
+    @Test fun `empty excessive and oversized batches fail before networking`() {
+        var calls = 0
+        val client = VisionAgentService.createDefaultClient().newBuilder().addInterceptor { chain ->
+            calls++
+            response(chain.request(), 200, toolResponse())
+        }.build()
+        val badBatches = listOf(
+            emptyList(), listOf(byteArrayOf()),
+            List(ReceiptImageBatch.MAX_IMAGES + 1) { byteArrayOf(1) },
+            listOf(ByteArray(ReceiptImageBatch.MAX_IMAGE_BYTES + 1)),
+            List(ReceiptImageBatch.MAX_IMAGES) { ByteArray(ReceiptImageBatch.MAX_IMAGE_BYTES + 1) },
+        )
+        badBatches.forEach { images ->
+            assertThrows(IllegalArgumentException::class.java) {
+                runBlocking { VisionAgentService(client).parseReceipt(settings, images) }
+            }
+        }
+        assertEquals(0, calls)
+    }
+
+    @Test fun `five photos at exact byte limits remain accepted`() {
+        val photos = List(ReceiptImageBatch.MAX_IMAGES) { ByteArray(ReceiptImageBatch.MAX_IMAGE_BYTES) }
+        assertEquals(ReceiptImageBatch.MAX_TOTAL_BYTES.toLong(), photos.sumOf { it.size.toLong() })
+        ReceiptImageBatch.validate(photos)
     }
 
     @Test fun `http errors suppress sensitive body and do not follow location`() {

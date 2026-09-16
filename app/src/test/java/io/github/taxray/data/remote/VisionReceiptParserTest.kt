@@ -17,6 +17,41 @@ import org.junit.Test
 import java.time.ZoneOffset
 
 class VisionReceiptParserTest {
+    @Test fun `different bills and unreadable photos give local actionable errors without drafts`() {
+        for ((issue, message) in listOf(
+            "multiple_receipts" to "请分开识别", "unreadable" to "重新拍摄",
+        )) {
+            val error = assertThrows(VisionException::class.java) {
+                VisionReceiptParser.parseResponse(response("""{"input_issue":"$issue","items":[]}"""))
+            }
+            assertTrue(error.message.orEmpty().contains(message))
+        }
+        for (invalidIssue in listOf("unknown", "none", "synthetic-model-message")) {
+            val error = assertThrows(VisionException::class.java) {
+                VisionReceiptParser.parseArguments(arguments().dropLast(1) + ",\"input_issue\":\"$invalidIssue\"}")
+            }
+            assertFalse(error.message.orEmpty().contains(invalidIssue))
+        }
+    }
+
+    @Test fun `unclear overlap keeps a reviewable draft and identical independent lines remain separate`() {
+        val item = Json.parseToJsonElement(arguments()).jsonObject.getValue("items").jsonArray.single()
+        val receipt = VisionReceiptParser.parseArguments(buildJsonObject {
+            put("input_issue", "unclear_overlap")
+            put("items", JsonArray(listOf(item, item)))
+            put("declared_total", "24.60")
+        }.toString())
+        assertEquals(2, receipt.items.size)
+        assertEquals(listOf("12.30", "12.30"), receipt.items.map { it.amount })
+        assertTrue(receipt.items[0].id != receipt.items[1].id)
+        assertEquals(listOf("部分照片重叠不清 请检查是否重复列入了同一行商品"), receipt.warnings)
+        assertEquals("24.60", receipt.declaredTotal)
+        assertThrows(VisionException::class.java) {
+            VisionReceiptParser.parseArguments("""{"input_issue":"unclear_overlap","items":[]}""")
+        }
+        assertThrows(VisionException::class.java) { VisionReceiptParser.parseArguments("""{"items":[]}""") }
+    }
+
     @Test fun `preserves numeric decimal lexeme without Double conversion`() {
         val receipt = VisionReceiptParser.parseArguments(arguments(amount = "99999999.99"))
         assertEquals("99999999.99", receipt.items.single().amount)
@@ -297,18 +332,22 @@ class VisionReceiptParserTest {
     }
 
     @Test fun `request uses one forced canonical tool and JPEG data URI`() {
-        val body = VisionAgentService.recognitionBody("vision-model", CompressedReceiptImage(byteArrayOf(1, 2), 1, 1))
+        val body = VisionAgentService.recognitionBody("vision-model", listOf(byteArrayOf(1, 2)))
         assertEquals(1, body.getValue("tools").jsonArray.size)
         assertEquals(VisionReceiptParser.FUNCTION_NAME, body.getValue("tool_choice").jsonObject
             .getValue("function").jsonObject.getValue("name").jsonPrimitive.content)
         val messages = body.getValue("messages").jsonArray
-        val url = messages[1].jsonObject.getValue("content").jsonArray[1].jsonObject
+        val url = messages[1].jsonObject.getValue("content").jsonArray.single {
+            it.jsonObject.getValue("type").jsonPrimitive.content == "image_url"
+        }.jsonObject
             .getValue("image_url").jsonObject.getValue("url").jsonPrimitive.content
         assertEquals("data:image/jpeg;base64,AQI=", url)
         assertFalse(body.containsKey("api_key"))
         val schema = body.getValue("tools").jsonArray.single().jsonObject.getValue("function").jsonObject.getValue("parameters").jsonObject
         val properties = schema.getValue("properties").jsonObject
         assertTrue(properties.containsKey("receipt_datetime"))
+        assertEquals(setOf("multiple_receipts", "unreadable", "unclear_overlap"),
+            properties.getValue("input_issue").jsonObject.getValue("enum").jsonArray.map { it.jsonPrimitive.content }.toSet())
         assertFalse(properties.containsKey("amount_issue"))
         val discount = properties.getValue("order_discount").jsonObject
         assertEquals(setOf("amount", "evidence"), discount.getValue("required").jsonArray.map { it.jsonPrimitive.content }.toSet())

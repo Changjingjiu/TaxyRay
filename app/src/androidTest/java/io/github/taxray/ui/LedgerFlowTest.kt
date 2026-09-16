@@ -76,8 +76,7 @@ class LedgerFlowTest {
         compose.onNode(receiptCard).performClick()
         compose.onNodeWithText("¥13.00").assertIsDisplayed()
         compose.onNodeWithText("¥100.00").assertIsDisplayed()
-        compose.onAllNodes(hasScrollToIndexAction()).onLast().performScrollToNode(hasText("编辑账单"))
-        compose.onNodeWithText("编辑账单").performClick()
+        compose.onNodeWithContentDescription("编辑账单").assertIsDisplayed().performClick()
 
         scrollToTag("amount0").performTextReplacement("226.00")
         compose.onNodeWithTag("amount0").assertTextContains("226.00")

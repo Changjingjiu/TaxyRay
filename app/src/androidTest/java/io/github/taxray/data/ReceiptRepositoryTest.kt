@@ -102,6 +102,30 @@ class ReceiptRepositoryTest {
         assertEquals(0L, db.receiptDao().totals().totalTaxCents)
     }
 
+    @Test fun batchDeleteCrossesParameterChunkBoundaryAndRollsBackAsOneTransaction() = runBlocking {
+        val rows = List(502) { receipt("batch-$it") }
+        repository.importReceipts(rows)
+        val selected = rows.take(501).map { it.id }
+        // Fail only in the second 500-ID chunk to prove the first chunk is rolled back too.
+        db.openHelper.writableDatabase.execSQL("""
+            CREATE TRIGGER prevent_selected_delete BEFORE DELETE ON receipts
+            WHEN OLD.id = 'batch-500'
+            BEGIN SELECT RAISE(ABORT, 'test batch failure'); END
+        """.trimIndent())
+        val failure = runCatching { repository.deleteAll(selected) }
+        assertTrue(failure.isFailure)
+        assertEquals(rows.associateBy { it.id }, repository.all().associateBy { it.id })
+        assertEquals(502L, db.receiptDao().itemCount())
+
+        db.openHelper.writableDatabase.execSQL("DROP TRIGGER prevent_selected_delete")
+        repository.deleteAll(selected + selected.first() + "already-missing")
+        assertEquals(listOf(rows.last()), repository.all())
+        assertEquals(1L, db.receiptDao().itemCount())
+        assertEquals(1_300L, db.receiptDao().totals().totalTaxCents)
+        repository.deleteAll(emptyList())
+        assertEquals(listOf(rows.last()), repository.all())
+    }
+
     @Test fun foreignKeyPreventsOrphanItems() = runBlocking {
         val result = runCatching {
             db.receiptDao().insertItems(listOf(ReceiptItemEntity("item", "missing", 0, "商品", 11300, 1300, 10000, 1300, "")))

@@ -158,7 +158,7 @@ class LedgerInteractionRegressionTest {
             TaxyRayTheme {
                 Surface(Modifier.fillMaxSize()) {
                     DashboardScreen(receipts, historyOnly, busy = false, loadError = null,
-                        onAdd = {}, onScan = {}, onDetail = {}, onAll = {})
+                        onAdd = {}, onScan = {}, onDetail = {}, onAll = {}, onShareAll = {}, onDeleteSelection = {})
                 }
             }
         }

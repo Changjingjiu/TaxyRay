@@ -32,6 +32,9 @@ interface ReceiptDao {
     @Query("DELETE FROM receipts WHERE id = :id")
     suspend fun deleteReceipt(id: String)
 
+    @Query("DELETE FROM receipts WHERE id IN (:ids)")
+    suspend fun deleteReceipts(ids: List<String>)
+
     @Query("SELECT COUNT(*) FROM receipt_items")
     suspend fun itemCount(): Long
 

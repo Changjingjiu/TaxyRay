@@ -141,7 +141,7 @@ class ImageCompressor(context: Context) {
 
     companion object {
         const val MAX_EDGE = 1_920
-        const val MAX_BYTES = 1_000_000
+        const val MAX_BYTES = ReceiptImageBatch.MAX_IMAGE_BYTES
         private const val MAX_SOURCE_BYTES = 40_000_000L
     }
 }

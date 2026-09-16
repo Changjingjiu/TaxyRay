@@ -8,14 +8,18 @@ import androidx.lifecycle.viewModelScope
 import io.github.taxray.core.*
 import io.github.taxray.data.backup.BackupCodec
 import io.github.taxray.data.remote.ImageCompressor
+import io.github.taxray.data.remote.ReceiptImageBatch
+import io.github.taxray.data.remote.CameraCaptureStore
 import io.github.taxray.data.remote.VisionAgentService
 import io.github.taxray.data.security.ApiSettings
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
-import java.util.UUID
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.util.UUID
+
+data class DuplicateReceiptReview(val draft: ReceiptDraft, val matches: List<Receipt>, val continueAdding: Boolean)
 
 class TaxyRayViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as TaxyRayApplication
@@ -30,6 +34,7 @@ class TaxyRayViewModel(application: Application) : AndroidViewModel(application)
     var settings by mutableStateOf(ApiSettings()); private set
     var settingsError by mutableStateOf<String?>(null); private set
     var pendingImport by mutableStateOf<List<Receipt>?>(null); private set
+    var duplicateReview by mutableStateOf<DuplicateReceiptReview?>(null); private set
     private var activeJob: Job? = null
 
     val receipts = repository.receipts
@@ -57,25 +62,48 @@ class TaxyRayViewModel(application: Application) : AndroidViewModel(application)
         }
     }
     fun cancelWork() { activeJob?.cancel(); notify("已取消操作") }
-    fun newReceipt() { if (!busy) editor = ReceiptDraft() }
+    fun newReceipt() { if (!busy) { duplicateReview = null; editor = ReceiptDraft() } }
     fun edit(receipt: Receipt) {
         if (busy) return
+        duplicateReview = null
         editor = ReceiptDraft(id = receipt.id, storeName = receipt.storeName, timestamp = receipt.timestamp,
             items = receipt.items.map { DraftItem(it.id, it.name, TaxCalculator.formatMoney(it.breakdown.amountCents), TaxCalculator.formatRate(it.breakdown.taxRateBps), it.categoryReason) })
     }
-    fun updateDraft(value: ReceiptDraft) { if (!busy) editor = value }
-    fun closeEditor() { if (!busy) editor = null }
+    fun updateDraft(value: ReceiptDraft) { if (!busy) { duplicateReview = null; editor = value } }
+    fun closeEditor() { if (!busy) { duplicateReview = null; editor = null } }
     fun saveReceipt(continueAdding: Boolean = false) {
         val draft = editor ?: return
         val error = draft.validationMessage()
         if (error != null) { notify(error); return }
         work("正在保存账单") {
-            repository.save(draft.storeName, draft.settledItems(), draft.id, draft.timestamp)
-            editor = if (continueAdding) ReceiptDraft(storeName = draft.storeName) else null
-            notify("已保存到本地账本")
+            if (draft.fromVision && draft.id == null) {
+                val candidate = Receipt(UUID.randomUUID().toString(), draft.storeName, draft.timestamp, draft.calculated())
+                val matches = withContext(Dispatchers.Default) { ReceiptDuplicates.find(candidate, repository.all()) }
+                if (matches.isNotEmpty()) {
+                    duplicateReview = DuplicateReceiptReview(draft, matches, continueAdding)
+                    return@work
+                }
+            }
+            persistDraft(draft, continueAdding)
         }
     }
-    fun delete(receipt: Receipt) = work("正在删除账单") { repository.delete(receipt.id); notify("账单已删除") }
+    fun dismissDuplicateReview() { if (!busy) duplicateReview = null }
+    fun confirmDuplicateReceipt() {
+        val review = duplicateReview ?: return
+        if (editor != review.draft) { duplicateReview = null; return }
+        work("正在保存账单") { persistDraft(review.draft, review.continueAdding) }
+    }
+    private suspend fun persistDraft(draft: ReceiptDraft, continueAdding: Boolean) {
+        repository.save(draft.storeName, draft.settledItems(), draft.id, draft.timestamp)
+        duplicateReview = null
+        editor = if (continueAdding) ReceiptDraft(storeName = draft.storeName) else null
+        notify("已保存到本地账本")
+    }
+    fun delete(receipt: Receipt) = deleteReceipts(listOf(receipt))
+    fun deleteReceipts(selected: List<Receipt>) = work("正在删除账单") {
+        repository.deleteAll(selected.map { it.id })
+        notify("已删除 ${selected.map { it.id }.distinct().size} 笔账单")
+    }
     fun saveSettings(value: ApiSettings) = work("正在加密保存") {
         withContext(Dispatchers.IO) { app.securePreferences.save(value) }
         settings = value; settingsError = null; notify("API 配置已加密保存在本机")
@@ -85,10 +113,16 @@ class TaxyRayViewModel(application: Application) : AndroidViewModel(application)
         settings = ApiSettings(); settingsError = null; notify("API 配置及其加密密钥已重置")
     }
     fun testConnection(value: ApiSettings) = work("正在测试模型连接") { notify(service.testConnection(value)) }
-    fun recognize(uri: Uri) = work("正在压缩并识别小票") {
+    fun recognize(uris: List<Uri>) = work("正在压缩小票图片") {
         try {
-            val image = ImageCompressor(app).compress(uri)
-            val result = service.parseReceipt(settings, image)
+            require(uris.size in 1..ReceiptImageBatch.MAX_IMAGES) { "每次请选择 1 至 ${ReceiptImageBatch.MAX_IMAGES} 张图片" }
+            val compressor = ImageCompressor(app)
+            val images = uris.mapIndexed { index, uri ->
+                activityLabel = "正在处理第 ${index + 1} / ${uris.size} 张图片"
+                compressor.compress(uri).bytes
+            }
+            activityLabel = "正在识别 ${images.size} 张小票图片"
+            val result = service.parseReceipt(settings, images)
             val timestamp = result.receiptDateTime?.let { LocalDateTime.parse(it).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() }
             editor = ReceiptDraft(storeName = result.storeName, timestamp = timestamp ?: System.currentTimeMillis(),
                 items = result.items, declaredTotal = result.declaredTotal.orEmpty(), fromVision = true,
@@ -100,7 +134,7 @@ class TaxyRayViewModel(application: Application) : AndroidViewModel(application)
             editor = ReceiptDraft(warnings = listOf("识别未完成 ${e.message ?: "请重试"} 可在这里手动录入"))
             notify("识别未完成，可手动补录或重新选图")
         } finally {
-            withContext(NonCancellable + Dispatchers.IO) { app.cacheDir.resolve("camera").deleteRecursively() }
+            withContext(NonCancellable) { CameraCaptureStore(app).discard(uris) }
         }
     }
     fun export(uri: Uri, format: String) = work("正在导出账本") {
@@ -148,7 +182,7 @@ class TaxyRayViewModel(application: Application) : AndroidViewModel(application)
             app.cacheDir.resolve("share").deleteRecursively()
             app.cacheDir.resolve("camera").deleteRecursively()
         }
-        settings = ApiSettings(); settingsError = null; editor = null; pendingImport = null
+        settings = ApiSettings(); settingsError = null; editor = null; pendingImport = null; duplicateReview = null
         notify("本机账本、API 配置和临时图片已清空")
     }
 }

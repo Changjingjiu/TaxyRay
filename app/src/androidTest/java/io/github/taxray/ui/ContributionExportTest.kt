@@ -38,6 +38,7 @@ class ContributionExportTest {
     private val storeName = "日常采购"
     private val creationMarker = "$storeName · QA-$runId"
     private var createdReceiptId: String? = null
+    private val additionalReceiptIds = mutableListOf<String>()
     private val app get() = ApplicationProvider.getApplicationContext<TaxyRayApplication>()
     private val resolver get() = app.contentResolver
     private var baseline: List<Receipt> = emptyList()
@@ -61,13 +62,14 @@ class ContributionExportTest {
             // This recovery branch also cleans up when an assertion fails directly after saving.
             val ownedId = createdReceiptId ?: app.receipts.all()
                 .singleOrNull { it.storeName == creationMarker && it.id !in originalIds }?.id
-            if (ownedId != null) {
-                assertFalse("Refusing to delete an existing record", ownedId in originalIds)
-                app.receipts.delete(ownedId)
+            val ownedIds = additionalReceiptIds + listOfNotNull(ownedId)
+            ownedIds.forEach { id ->
+                assertFalse("Refusing to delete an existing record", id in originalIds)
+                app.receipts.delete(id)
             }
             val remaining = app.receipts.all().associateBy { it.id }
             baseline.forEach { original -> assertEquals("Existing record was modified", original, remaining[original.id]) }
-            assertFalse(remaining.containsKey(ownedId))
+            ownedIds.forEach { assertFalse(remaining.containsKey(it)) }
         }
         deleteResults.forEach { assertEquals("Could not remove this test's gallery image", 1, it.getOrThrow()) }
         assertTrue("Existing gallery files were removed", galleryImages().map { it.id }.toSet().containsAll(existingImages))
@@ -159,6 +161,49 @@ class ContributionExportTest {
         compose.onNodeWithText("总览").performClick()
         compose.onAllNodes(hasScrollToIndexAction()).onFirst().performScrollToIndex(0)
         saveScreen("home-real-receipt")
+    }
+
+    @Test fun cumulativeCardIncludesAllSavedBillsAndExportsBothTemplates() {
+        runBlocking {
+            additionalReceiptIds += app.receipts.save("累计卡测试 $runId A", listOf(
+                DraftItem(name = "日用品", amount = "113.00", ratePercent = "13"),
+                DraftItem(name = "粮食", amount = "109.00", ratePercent = "9"),
+            ), timestamp = 1_704_096_000_000L)
+            additionalReceiptIds += app.receipts.save("累计卡测试 $runId B", listOf(
+                DraftItem(name = "服务", amount = "106.00", ratePercent = "6"),
+                DraftItem(name = "零税额记录", amount = "20.00", ratePercent = "0"),
+            ), timestamp = 1_735_718_400_000L)
+        }
+        val expectedPaid = baseline.sumOf { it.totalAmountCents } + 34_800L
+        val expectedTax = baseline.sumOf { it.totalTaxCents } + 2_800L
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onAllNodesWithTag("shareAllReceipts").fetchSemanticsNodes().isNotEmpty()
+        }
+        // The cumulative card must include old bills even after filtering the ledger to no matches.
+        compose.onNodeWithText("账本").performClick()
+        compose.onNodeWithText("搜索商户或商品").performTextReplacement("no-match-$runId")
+        hideKeyboard()
+        compose.onNodeWithText("近 30 天").performClick()
+        compose.onNodeWithText("总览").performClick()
+        compose.onNodeWithTag("shareAllReceipts").performScrollTo().performClick()
+        val inCard = hasAnyAncestor(isDialog() and hasAnyDescendant(hasText("累计贡献卡")))
+        compose.onNode(hasText("累计贡献卡") and inCard).assertIsDisplayed()
+        compose.onNode(hasText("全部 ${baseline.size + 2} 笔账单") and inCard).assertIsDisplayed()
+        compose.onNode(hasText("累计增值税估算") and inCard).assertExists()
+        compose.onNode(hasText("累计消费实付") and inCard).assertExists()
+        compose.onNode(hasText("¥${TaxCalculator.formatMoney(expectedPaid)}") and inCard).assertExists()
+        compose.onNode(hasText("¥${TaxCalculator.formatMoney(expectedTax)}") and inCard).assertIsDisplayed()
+
+        saveScreen("cumulative-paper")
+        val paper = saveAndInspectGalleryCard("cumulative-paper")
+        compose.onNodeWithText("松石绿").performClick().assertIsSelected()
+        compose.waitForIdle()
+        saveScreen("cumulative-forest")
+        val forest = saveAndInspectGalleryCard("cumulative-forest")
+        assertEquals(paper.width, forest.width)
+        assertEquals(paper.height, forest.height)
+        assertNotEquals(paper.background, forest.background)
+        compose.onNodeWithContentDescription("关闭贡献卡").performClick()
     }
 
     private fun saveAndInspectGalleryCard(template: String): ImageEvidence {

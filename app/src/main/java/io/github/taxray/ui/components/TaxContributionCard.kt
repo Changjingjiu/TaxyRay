@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.taxray.core.ContributionSummary
 import io.github.taxray.core.Receipt
 import io.github.taxray.core.TaxCalculator
 import io.github.taxray.ui.theme.AmountStyle
@@ -56,15 +57,51 @@ fun TaxContributionCard(
     modifier: Modifier = Modifier,
     template: CardTemplate = CardTemplate.PAPER,
 ) {
+    val summary = remember(receipt) { ContributionSummary.fromReceipts(listOf(receipt)) }
+    ContributionCard(
+        summary = summary,
+        subject = receipt.storeName.ifBlank { "日常消费" },
+        period = "${dateText(receipt.timestamp, detail = true)} · ${receipt.items.size} 项",
+        cumulative = false,
+        modifier = modifier,
+        template = template,
+    )
+}
+
+/** Shares the complete saved ledger, independent of the ledger screen's search or date filters. */
+@Composable
+fun CumulativeTaxContributionCard(
+    receipts: List<Receipt>,
+    modifier: Modifier = Modifier,
+    template: CardTemplate = CardTemplate.PAPER,
+) {
+    val summary = remember(receipts) { ContributionSummary.fromReceipts(receipts) }
+    val firstDay = summary.firstTimestamp?.let { dateText(it, detail = true).substringBefore(' ') }
+    val lastDay = summary.lastTimestamp?.let { dateText(it, detail = true).substringBefore(' ') }
+    val period = when {
+        firstDay == null -> "暂无账单"
+        firstDay == lastDay -> "$firstDay · ${summary.itemCount} 项"
+        else -> "$firstDay — $lastDay\n${summary.itemCount} 项消费"
+    }
+    ContributionCard(summary, "全部 ${summary.receiptCount} 笔账单", period, true, modifier, template)
+}
+
+@Composable
+private fun ContributionCard(
+    summary: ContributionSummary,
+    subject: String,
+    period: String,
+    cumulative: Boolean,
+    modifier: Modifier,
+    template: CardTemplate,
+) {
     MaterialTheme(colorScheme = if (template == CardTemplate.PAPER) PaperColors else ForestColors) {
         val colors = MaterialTheme.colorScheme
-        val groups = remember(receipt) {
-            val all = receipt.items.groupBy { it.breakdown.taxRateBps }
-                .map { (bps, items) -> bps to items.sumOf { it.breakdown.taxCents } }
-                .sortedWith(compareByDescending<Pair<Int, Long>> { it.second }.thenByDescending { it.first })
-            if (all.size <= 5) all.map { CompositionGroup("${TaxCalculator.formatRate(it.first)}%", it.second) }
-            else all.take(4).map { CompositionGroup("${TaxCalculator.formatRate(it.first)}%", it.second) } +
-                CompositionGroup("其他 ${all.size - 4} 档", all.drop(4).sumOf { it.second })
+        val groups = remember(summary) {
+            val all = summary.rateGroups
+            if (all.size <= 5) all.map { CompositionGroup("${TaxCalculator.formatRate(it.rateBps)}%", it.taxCents) }
+            else all.take(4).map { CompositionGroup("${TaxCalculator.formatRate(it.rateBps)}%", it.taxCents) } +
+                CompositionGroup("其他 ${all.size - 4} 档", all.drop(4).fold(0L) { sum, group -> Math.addExact(sum, group.taxCents) })
         }
         val palette = if (template == CardTemplate.PAPER) listOf(
             Color(0xFF08785A), Color(0xFF438AAC), Color(0xFF8473A7), Color(0xFFB57B3A), Color(0xFF84918B),
@@ -78,32 +115,32 @@ fun TaxContributionCard(
             Spacer(Modifier.height(18.dp))
             DashedDivider()
             Spacer(Modifier.height(16.dp))
-            Text(receipt.storeName.ifBlank { "日常消费" }, fontSize = 15.sp, fontWeight = FontWeight.Medium,
+            Text(subject, fontSize = 15.sp, fontWeight = FontWeight.Medium,
                 color = colors.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(4.dp))
-            Text("${dateText(receipt.timestamp, detail = true)} · ${receipt.items.size} 项", fontSize = 11.sp, color = colors.onSurfaceVariant)
+            Text(period, fontSize = 11.sp, lineHeight = 17.sp, color = colors.onSurfaceVariant)
             Spacer(Modifier.height(20.dp))
-            Text("本次增值税估算", fontSize = 12.sp, color = colors.onSurfaceVariant)
+            Text(if (cumulative) "累计增值税估算" else "本次增值税估算", fontSize = 12.sp, color = colors.onSurfaceVariant)
             Spacer(Modifier.height(6.dp))
-            val taxValue = money(receipt.totalTaxCents)
+            val taxValue = money(summary.totalTaxCents)
             BoxWithConstraints(Modifier.fillMaxWidth()) {
                 val size = minOf(35f, maxWidth.value / (taxValue.length * .62f * LocalDensity.current.fontScale)).coerceAtLeast(12f).sp
                 Text(taxValue, style = AmountStyle.copy(fontSize = size), color = colors.primary, maxLines = 1)
             }
             Spacer(Modifier.height(16.dp))
-            AmountRow("消费实付", money(receipt.totalAmountCents))
+            AmountRow(if (cumulative) "累计消费实付" else "消费实付", money(summary.totalAmountCents))
             Spacer(Modifier.height(6.dp))
-            AmountRow("估算税前金额", money(receipt.totalPreTaxCents))
+            AmountRow("估算税前金额", money(summary.totalPreTaxCents))
             Spacer(Modifier.height(6.dp))
-            AmountRow("估算税额 / 实付", "${receipt.effectiveRatePercent}%")
+            AmountRow("估算税额 / 实付", "${summary.effectiveRatePercent}%")
             Spacer(Modifier.height(18.dp))
             DashedDivider()
             Spacer(Modifier.height(14.dp))
             Text("估算税额构成", fontSize = 12.sp, color = colors.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
-            val totalTax = receipt.totalTaxCents
+            val totalTax = summary.totalTaxCents
             Canvas(Modifier.fillMaxWidth().height(7.dp).semantics {
-                contentDescription = if (totalTax == 0L) "本次估算税额为零" else groups.joinToString { "${it.label} ${money(it.taxCents)}" }
+                contentDescription = if (totalTax == 0L) "估算税额为零" else groups.joinToString { "${it.label} ${money(it.taxCents)}" }
             }) {
                 drawRect(colors.outlineVariant)
                 // Floating-point ratios are used for pixels only, never stored amounts.
