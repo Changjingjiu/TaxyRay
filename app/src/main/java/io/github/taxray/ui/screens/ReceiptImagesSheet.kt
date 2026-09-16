@@ -31,6 +31,7 @@ import kotlinx.coroutines.withContext
 fun ReceiptImagesSheet(
     images: List<String>, destination: String, model: String,
     cameraBusy: Boolean = false,
+    previousItemCount: Int = 0,
     onImagesChanged: (List<String>) -> Unit, onPick: () -> Unit, onCamera: () -> Unit,
     onSend: () -> Unit, onDismiss: () -> Unit,
 ) {
@@ -64,7 +65,7 @@ fun ReceiptImagesSheet(
                 Text("${images.size} / ${ReceiptImageBatch.MAX_IMAGES}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 IconButton(onClick = onDismiss) { Icon(Icons.Outlined.Close, "关闭选图") }
             }
-            Text("同一张小票可分段拍摄 按从上到下的顺序排列", Modifier.padding(horizontal = 22.dp, vertical = 8.dp),
+            Text(if (previousItemCount == 0) "同一张小票可分次识别 相册每轮最多 5 张" else "已有 $previousItemCount 项 继续拍摄这张小票的剩余部分", Modifier.padding(horizontal = 22.dp, vertical = 8.dp),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             LazyColumn(Modifier.weight(1f).testTag("receiptImages"), contentPadding = PaddingValues(horizontal = 22.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (images.isEmpty()) item {
@@ -93,14 +94,14 @@ fun ReceiptImagesSheet(
             }
             Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedButton(onClick = onCamera, enabled = !cameraBusy && images.size < ReceiptImageBatch.MAX_IMAGES, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                        Icon(Icons.Outlined.PhotoCamera, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(if (images.isEmpty()) "拍照" else "继续拍照")
+                    OutlinedButton(onClick = onCamera, enabled = !cameraBusy && images.isEmpty(), modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
+                        Icon(Icons.Outlined.PhotoCamera, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("拍照并识别")
                     }
                     OutlinedButton(onClick = onPick, enabled = images.size < ReceiptImageBatch.MAX_IMAGES, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
                         Icon(Icons.Outlined.PhotoLibrary, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("相册多选")
                     }
                 }
-                Text("发送至 $destination\n模型 $model\n图片由该服务处理 可能产生 API 费用", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("发送至 $destination\n模型 $model\n拍照确认后自动识别 相册选图需点击发送\n图片由该服务处理 可能产生 API 费用", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Button(onClick = onSend, enabled = images.isNotEmpty(), modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("sendReceiptImages")) { Text("发送并识别 ${images.size} 张") }
             }
         }

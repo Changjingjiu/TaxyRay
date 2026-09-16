@@ -20,6 +20,7 @@ data class ReceiptDraft(
     val warnings: List<String> = emptyList(),
     val receiptDiscount: ReceiptDiscount? = null,
     val appliedDiscount: AppliedDiscount? = null,
+    val requireDeclaredTotal: Boolean = false,
 ) {
     fun allocateDiscount(): ReceiptDraft {
         val original = TaxCalculator.calculateItems(items).map { it.breakdown.amountCents }
@@ -47,6 +48,7 @@ data class ReceiptDraft(
 
     fun validationMessage(): String? = runCatching {
         require(storeName.length <= 120) { "商户名称不能超过 120 字" }
+        require(!requireDeclaredTotal || declaredTotal.isNotBlank()) { "照片中的金额有冲突 请填写最终实付后入账" }
         val total = calculated().sumOf { it.breakdown.amountCents }
         require(receiptDiscount?.amountCents?.let { it > 0 } != true || declaredTotal.isNotBlank()) {
             "识别到整单优惠 请先填写最终实付"

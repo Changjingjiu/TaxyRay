@@ -42,10 +42,12 @@ class ReceiptDetailLayoutTest {
         }
         compose.onNodeWithContentDescription("编辑账单").assertIsDisplayed()
             .assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp).performClick()
-        compose.onNodeWithTag("receiptDetailItems").performScrollToNode(hasTestTag("receiptRoundingNote"))
+        // Jump over the 100 product rows to the footer instead of repeatedly
+        // traversing a changing lazy semantics tree during a list-wide search.
+        compose.onNodeWithTag("receiptDetailItems").performScrollToIndex(receipt.items.size + 3)
         compose.onNodeWithTag("receiptRoundingNote").assertIsDisplayed().assertWidthIsAtLeast(260.dp)
         compose.onNodeWithContentDescription("编辑账单").assertIsDisplayed().performClick()
-        compose.onNodeWithTag("receiptDetailItems").performScrollToNode(hasText("删除账单"))
+        compose.onNodeWithText("删除账单").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("删除账单").performClick()
         compose.runOnIdle { assertEquals(0, deleteCount) }
         compose.onNodeWithText("保留账单").performClick()

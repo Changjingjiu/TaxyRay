@@ -13,7 +13,7 @@ import io.github.taxray.ui.components.dateText
 import io.github.taxray.ui.components.money
 
 @Composable
-fun DuplicateReceiptDialog(review: DuplicateReceiptReview, busy: Boolean, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+fun DuplicateReceiptDialog(review: DuplicateReceiptReview, busy: Boolean, onDismiss: () -> Unit, onConfirm: () -> Unit, onKeepExisting: () -> Unit) {
     AlertDialog(onDismissRequest = { if (!busy) onDismiss() }, title = { Text("可能已录入这笔账单") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("账本中有相似记录 是否仍然录入")
@@ -24,7 +24,8 @@ fun DuplicateReceiptDialog(review: DuplicateReceiptReview, busy: Boolean, onDism
                 }
             }
             if (review.matches.size > 3) Text("还有 ${review.matches.size - 3} 笔相似记录", style = MaterialTheme.typography.bodySmall)
-            Text("相似记录只作提醒 不会自动合并", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("保留已有会放弃本次重复录入 也可选择仍然录入", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            TextButton(onClick = onKeepExisting, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("保留已有账单") }
         }
     }, confirmButton = { TextButton(onClick = onConfirm, enabled = !busy) { Text("仍然录入") } },
         dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text("返回核对") } })

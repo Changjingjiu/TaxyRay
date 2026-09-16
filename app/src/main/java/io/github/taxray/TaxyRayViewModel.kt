@@ -11,15 +11,15 @@ import io.github.taxray.data.remote.ImageCompressor
 import io.github.taxray.data.remote.ReceiptImageBatch
 import io.github.taxray.data.remote.CameraCaptureStore
 import io.github.taxray.data.remote.VisionAgentService
+import io.github.taxray.data.remote.VisionReceipt
 import io.github.taxray.data.security.ApiSettings
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
-import java.time.LocalDateTime
-import java.time.ZoneId
 import java.util.UUID
 
 data class DuplicateReceiptReview(val draft: ReceiptDraft, val matches: List<Receipt>, val continueAdding: Boolean)
+data class ScanDuplicateReview(val draft: ReceiptDraft, val groups: List<DuplicateItemGroup>, val groupIndex: Int = 0)
 
 class TaxyRayViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as TaxyRayApplication
@@ -35,6 +35,10 @@ class TaxyRayViewModel(application: Application) : AndroidViewModel(application)
     var settingsError by mutableStateOf<String?>(null); private set
     var pendingImport by mutableStateOf<List<Receipt>?>(null); private set
     var duplicateReview by mutableStateOf<DuplicateReceiptReview?>(null); private set
+    var scanSession by mutableStateOf<ReceiptScanSession?>(null); private set
+    var scanRoundReady by mutableStateOf(false); private set
+    var scanError by mutableStateOf<String?>(null); private set
+    var scanDuplicateReview by mutableStateOf<ScanDuplicateReview?>(null); private set
     private var activeJob: Job? = null
 
     val receipts = repository.receipts
@@ -88,6 +92,14 @@ class TaxyRayViewModel(application: Application) : AndroidViewModel(application)
         }
     }
     fun dismissDuplicateReview() { if (!busy) duplicateReview = null }
+    fun keepExistingReceipt() {
+        if (busy) return
+        val review = duplicateReview ?: return
+        if (editor != review.draft) { duplicateReview = null; return }
+        duplicateReview = null
+        editor = if (review.continueAdding) ReceiptDraft(storeName = review.draft.storeName) else null
+        notify("已保留已有账单 本次未重复入账")
+    }
     fun confirmDuplicateReceipt() {
         val review = duplicateReview ?: return
         if (editor != review.draft) { duplicateReview = null; return }
@@ -113,8 +125,61 @@ class TaxyRayViewModel(application: Application) : AndroidViewModel(application)
         settings = ApiSettings(); settingsError = null; notify("API 配置及其加密密钥已重置")
     }
     fun testConnection(value: ApiSettings) = work("正在测试模型连接") { notify(service.testConnection(value)) }
+    fun beginScan() {
+        if (busy) return
+        scanSession = ReceiptScanSession()
+        scanRoundReady = false; scanError = null; scanDuplicateReview = null
+    }
+    fun prepareNextScanRound() {
+        if (busy) return
+        if (scanSession == null) {
+            scanSession = ReceiptScanSession()
+            notify("此前未入账的识别已失效 请重新拍摄")
+        }
+        scanRoundReady = false; scanError = null
+    }
+    fun cancelPhotoSelection() {
+        if (busy) return
+        if (scanSession?.rounds?.isNotEmpty() == true) { scanError = null; scanRoundReady = true }
+        else discardScan()
+    }
+    fun discardScan() {
+        if (busy) return
+        scanSession = null; scanRoundReady = false; scanError = null; scanDuplicateReview = null
+    }
+    /** The network result only extends a pending session. Nothing is persisted here. */
+    internal fun acceptScanRound(result: VisionReceipt) {
+        val session = requireNotNull(scanSession) { "本次录入已结束 请重新拍摄" }
+        scanSession = session.append(result)
+        scanError = null; scanRoundReady = true
+    }
+    fun finishScan() {
+        if (busy) return
+        val session = scanSession ?: return
+        if (session.rounds.isEmpty()) return
+        work("正在整理识别结果") {
+            val draft = session.draft()
+            val groups = withContext(Dispatchers.Default) { ReceiptItemDuplicates.find(draft.items) }
+            scanRoundReady = false; scanError = null
+            if (groups.isEmpty()) { editor = draft; scanSession = null }
+            else scanDuplicateReview = ScanDuplicateReview(draft, groups)
+        }
+    }
+    fun resolveScanDuplicate(groupId: String, keepId: String? = null) {
+        if (busy) return
+        val review = scanDuplicateReview ?: return
+        val group = review.groups[review.groupIndex]
+        if (group.items.first().id != groupId) return
+        if (keepId != null && group.items.none { it.id == keepId }) return
+        val removedIds = if (keepId == null) emptySet() else group.items.filter { it.id != keepId }.map { it.id }.toSet()
+        val draft = review.draft.copy(items = review.draft.items.filterNot { it.id in removedIds })
+        val next = review.groupIndex + 1
+        if (next < review.groups.size) scanDuplicateReview = review.copy(draft = draft, groupIndex = next)
+        else { editor = draft; scanDuplicateReview = null; scanSession = null }
+    }
     fun recognize(uris: List<Uri>) = work("正在压缩小票图片") {
         try {
+            requireNotNull(scanSession) { "录入已中断 此前未保存的内容已失效 请重新拍摄" }
             require(uris.size in 1..ReceiptImageBatch.MAX_IMAGES) { "每次请选择 1 至 ${ReceiptImageBatch.MAX_IMAGES} 张图片" }
             val compressor = ImageCompressor(app)
             val images = uris.mapIndexed { index, uri ->
@@ -123,18 +188,18 @@ class TaxyRayViewModel(application: Application) : AndroidViewModel(application)
             }
             activityLabel = "正在识别 ${images.size} 张小票图片"
             val result = service.parseReceipt(settings, images)
-            val timestamp = result.receiptDateTime?.let { LocalDateTime.parse(it).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() }
-            editor = ReceiptDraft(storeName = result.storeName, timestamp = timestamp ?: System.currentTimeMillis(),
-                items = result.items, declaredTotal = result.declaredTotal.orEmpty(), fromVision = true,
-                receiptDiscount = result.discount,
-                warnings = result.warnings + if (timestamp == null) listOf("未读到完整消费时间 已用当前时间 可点击修改") else emptyList())
-            notify("识别完成 确认金额与税率后即可入账")
-        } catch (e: CancellationException) { throw e }
+            acceptScanRound(result)
+        } catch (e: CancellationException) {
+            scanError = "本轮识别已取消 已识别内容仍然保留"
+            throw e
+        }
         catch (e: Exception) {
-            editor = ReceiptDraft(warnings = listOf("识别未完成 ${e.message ?: "请重试"} 可在这里手动录入"))
-            notify("识别未完成，可手动补录或重新选图")
+            scanError = e.message ?: "本轮识别未完成 请重新拍摄"
         } finally {
-            withContext(NonCancellable) { CameraCaptureStore(app).discard(uris) }
+            withContext(NonCancellable) {
+                try { CameraCaptureStore(app).discard(uris) }
+                catch (_: Exception) { notify("临时照片清理失败 请稍后重试") }
+            }
         }
     }
     fun export(uri: Uri, format: String) = work("正在导出账本") {
@@ -183,6 +248,7 @@ class TaxyRayViewModel(application: Application) : AndroidViewModel(application)
             app.cacheDir.resolve("camera").deleteRecursively()
         }
         settings = ApiSettings(); settingsError = null; editor = null; pendingImport = null; duplicateReview = null
+        scanSession = null; scanRoundReady = false; scanError = null; scanDuplicateReview = null
         notify("本机账本、API 配置和临时图片已清空")
     }
 }

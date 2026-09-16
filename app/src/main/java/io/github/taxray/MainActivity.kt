@@ -80,6 +80,7 @@ fun TaxyRayApp(vm: TaxyRayViewModel = viewModel()) {
     var cameraPreparing by remember { mutableStateOf(false) }
     var scannerGeneration by rememberSaveable { mutableLongStateOf(0L) }
     var cameraGeneration by rememberSaveable { mutableLongStateOf(0L) }
+    var pickerGeneration by rememberSaveable { mutableLongStateOf(0L) }
     var pendingImagePath by rememberSaveable { mutableStateOf<String?>(null) }
     val exportJson = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { it?.let { uri -> vm.export(uri, "json") } }
     val exportCsv = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { it?.let { uri -> vm.export(uri, "csv") } }
@@ -124,15 +125,53 @@ fun TaxyRayApp(vm: TaxyRayViewModel = viewModel()) {
         showScanner = false
         imageUris = arrayListOf()
         discardImages(discarded)
+        vm.cancelPhotoSelection()
     }
     val pickImages = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(ReceiptImageBatch.MAX_IMAGES)) { uris ->
-        addImages(uris.map { it.toString() })
+        if (showScanner && pickerGeneration == scannerGeneration) addImages(uris.map { it.toString() })
     }
     val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         val uri = cameraUri
         cameraUri = null
-        if (success && uri != null && showScanner && cameraGeneration == scannerGeneration && imageUris.size < ReceiptImageBatch.MAX_IMAGES) addImages(listOf(uri))
+        if (success && uri != null && showScanner && cameraGeneration == scannerGeneration && imageUris.isEmpty()) {
+            showScanner = false
+            vm.recognize(listOf(Uri.parse(uri)))
+        }
         else if (uri != null) discardImages(listOf(Uri.parse(uri)))
+    }
+    fun launchCamera() {
+        if (cameraPreparing || cameraUri != null || imageUris.isNotEmpty()) return
+        cameraPreparing = true
+        val generation = scannerGeneration
+        scope.launch {
+            var created: Uri? = null
+            var launched = false
+            try {
+                created = cameraStore.create()
+                if (showScanner && generation == scannerGeneration) {
+                    cameraUri = created.toString()
+                    cameraGeneration = generation
+                    takePhoto.launch(created)
+                    launched = true
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { vm.notify("相机无法打开 请从相册选择") }
+            finally {
+                cameraPreparing = false
+                if (!launched) {
+                    cameraUri = null
+                    withContext(NonCancellable) {
+                        try { created?.let { cameraStore.discard(listOf(it)) } }
+                        catch (_: Exception) { vm.notify("临时照片清理失败 请稍后重试") }
+                    }
+                }
+            }
+        }
+    }
+    fun continueWithCamera() {
+        vm.prepareNextScanRound()
+        showScanner = true
+        launchCamera()
     }
     LaunchedEffect(vm) { vm.messages.collect { snackbarHost.showSnackbar(it) } }
     BackHandler(enabled = tab != 0 && detailId == null && cardId == null && !shareAll && vm.editor == null) { tab = 0 }
@@ -170,7 +209,8 @@ fun TaxyRayApp(vm: TaxyRayViewModel = viewModel()) {
                         }
                         when (tab) {
                             0, 1 -> DashboardScreen(receipts, tab == 1, vm.busy, vm.loadError, vm::newReceipt, {
-                                if (vm.settings.modelName.isBlank() || vm.settings.apiKey.isBlank() || vm.settingsError != null) showSetup = true else showScanner = true
+                                if (vm.settings.modelName.isBlank() || vm.settings.apiKey.isBlank() || vm.settingsError != null) showSetup = true
+                                else { vm.beginScan(); scannerGeneration++; showScanner = true }
                             }, { detailId = it.id }, { tab = 1 }, onShareAll = {
                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                 shareAll = true
@@ -214,48 +254,34 @@ fun TaxyRayApp(vm: TaxyRayViewModel = viewModel()) {
     if (showSetup) AlertDialog(onDismissRequest = { showSetup = false }, icon = { Icon(Icons.Outlined.Key, null) }, title = { Text("配置你的小票识别服务") }, text = { Text("填写自己的 API Key 与支持图片识别的模型\n也可使用离线手动记账") }, confirmButton = { TextButton(onClick = { showSetup = false; tab = 2 }) { Text("前往设置") } }, dismissButton = { TextButton(onClick = { showSetup = false; vm.newReceipt() }) { Text("手动记账") } })
     if (showScanner) ReceiptImagesSheet(imageUris, vm.settings.baseUrl, vm.settings.modelName,
         cameraBusy = cameraPreparing || cameraUri != null,
+        previousItemCount = vm.scanSession?.items?.size ?: 0,
         onImagesChanged = { updated ->
             val removed = (imageUris - updated.toSet()).map(Uri::parse)
             imageUris = ArrayList(updated)
             discardImages(removed)
         },
-        onPick = { pickImages.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-        onCamera = {
-            if (!cameraPreparing && cameraUri == null && imageUris.size < ReceiptImageBatch.MAX_IMAGES) {
-                cameraPreparing = true
-                val generation = scannerGeneration
-                scope.launch {
-                    var created: Uri? = null
-                    var launched = false
-                    try {
-                        created = cameraStore.create()
-                        if (showScanner && generation == scannerGeneration) {
-                            cameraUri = created.toString()
-                            cameraGeneration = generation
-                            takePhoto.launch(created)
-                            launched = true
-                        }
-                    } catch (cancelled: CancellationException) { throw cancelled }
-                    catch (_: Exception) { vm.notify("相机无法打开 请从相册选择") }
-                    finally {
-                        cameraPreparing = false
-                        if (!launched) {
-                            cameraUri = null
-                            withContext(NonCancellable) {
-                                try { created?.let { cameraStore.discard(listOf(it)) } }
-                                catch (_: Exception) { vm.notify("临时照片清理失败 请稍后重试") }
-                            }
-                        }
-                    }
-                }
-            }
-        }, onSend = {
+        onPick = { pickerGeneration = scannerGeneration; pickImages.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+        onCamera = ::launchCamera, onSend = {
             val images = imageUris.map(Uri::parse)
             showScanner = false
             imageUris = arrayListOf()
             vm.recognize(images)
         }, onDismiss = ::closeImages)
-    vm.duplicateReview?.let { DuplicateReceiptDialog(it, vm.busy, vm::dismissDuplicateReview, vm::confirmDuplicateReceipt) }
+    if (vm.scanRoundReady) vm.scanSession?.let { session ->
+        ScanRoundCompleteDialog(session.rounds.size, session.items.size, vm.busy,
+            onContinue = ::continueWithCamera, onFinish = vm::finishScan, onDiscard = vm::discardScan)
+    }
+    if (!vm.busy) vm.scanError?.let { message ->
+        ScanRecognitionFailureDialog(message, vm.scanSession?.rounds?.isNotEmpty() == true,
+            onRetry = ::continueWithCamera, onFinish = vm::finishScan, onDiscard = vm::discardScan)
+    }
+    vm.scanDuplicateReview?.let { review ->
+        val group = review.groups[review.groupIndex]
+        DuplicateItemsDialog(group.items, review.groupIndex, review.groups.size,
+            onKeepOne = { vm.resolveScanDuplicate(group.items.first().id, it) },
+            onKeepAll = { vm.resolveScanDuplicate(group.items.first().id) })
+    }
+    vm.duplicateReview?.let { DuplicateReceiptDialog(it, vm.busy, vm::dismissDuplicateReview, vm::confirmDuplicateReceipt, vm::keepExistingReceipt) }
     val deletionReceipts = receipts.filter { it.id in deletionIds }
     if (deletionReceipts.isNotEmpty()) DeleteReceiptsDialog(deletionReceipts, vm.busy,
         onDismiss = { deletionIds = emptyList() },

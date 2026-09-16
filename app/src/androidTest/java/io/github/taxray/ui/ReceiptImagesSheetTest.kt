@@ -33,7 +33,7 @@ class ReceiptImagesSheetTest {
         }
         compose.onNodeWithTag("sendReceiptImages").assertIsNotEnabled()
         compose.onNodeWithText("相册多选").performClick()
-        compose.onNodeWithText("拍照").performClick()
+        compose.onNodeWithText("拍照并识别").performClick()
         compose.runOnIdle {
             assertEquals(1, pickCount)
             assertEquals(1, cameraCount)
@@ -41,6 +41,8 @@ class ReceiptImagesSheetTest {
             images = listOf(photo(1))
         }
         compose.onNodeWithTag("sendReceiptImages").assertIsEnabled()
+        compose.onNodeWithText("拍照并识别").assertIsNotEnabled().performClick()
+        compose.runOnIdle { assertEquals(1, cameraCount) }
         compose.runOnIdle { assertEquals(0, sendCount) }
         compose.onNodeWithTag("sendReceiptImages").performClick()
         compose.runOnIdle { assertEquals(1, sendCount) }
@@ -73,7 +75,7 @@ class ReceiptImagesSheetTest {
         }
     }
 
-    @Test fun fiveImagesDisableBothAddActionsAndRemovingOneReenablesThem() {
+    @Test fun cameraRequiresEmptySelectionAndGalleryHonorsFiveImageLimit() {
         var images by mutableStateOf(List(ReceiptImageBatch.MAX_IMAGES) { photo(it + 1) })
         compose.setContent {
             TaxyRayTheme {
@@ -83,12 +85,15 @@ class ReceiptImagesSheetTest {
             }
         }
         compose.onNodeWithText("相册多选").assertIsNotEnabled()
-        compose.onNodeWithText("继续拍照").assertIsNotEnabled()
+        compose.onNodeWithText("拍照并识别").assertIsNotEnabled()
         compose.onNodeWithTag("sendReceiptImages").assertIsEnabled()
         compose.onNodeWithContentDescription("移除第 1 张").performClick()
         compose.runOnIdle { assertEquals(4, images.size) }
         compose.onNodeWithText("相册多选").assertIsEnabled()
-        compose.onNodeWithText("继续拍照").assertIsEnabled()
+        compose.onNodeWithText("拍照并识别").assertIsNotEnabled()
+        repeat(4) { compose.onNodeWithContentDescription("移除第 1 张").performClick() }
+        compose.onNodeWithText("拍照并识别").assertIsEnabled()
+        compose.onNodeWithTag("sendReceiptImages").assertIsNotEnabled()
     }
 
     // Missing local files intentionally use the recoverable placeholder preview path.

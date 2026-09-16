@@ -117,8 +117,8 @@ class VisionAgentServiceTest {
                     .drop(1).map { it.jsonObject.getValue("text").jsonPrimitive.content })
             assertEquals(1, body.getValue("tools").jsonArray.size)
             val prompt = messages.first().jsonObject.getValue("content").jsonPrimitive.content
-            assertTrue(prompt.contains("不能仅凭品名或金额相同去重"))
-            assertTrue(prompt.contains("独立购买行即使品名金额完全相同也分别保留"))
+            assertTrue(prompt.contains("不自行去重 不删除同名同价行"))
+            assertTrue(prompt.contains("跨照片的重复行留给用户处理"))
             assertTrue(prompt.contains("multiple_receipts"))
             assertFalse(body.toString().contains(settings.apiKey))
             response(chain.request(), 200, toolResponse())
