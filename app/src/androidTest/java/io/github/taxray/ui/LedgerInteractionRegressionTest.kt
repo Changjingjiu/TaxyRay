@@ -148,17 +148,62 @@ class LedgerInteractionRegressionTest {
         assertDisclaimerIsCentered()
     }
 
+    @Test fun batchSelectionFlowAndConfirmationDialog() {
+        var deletedIds: Set<String>? = null
+        val r1 = receipt("id-1", "商户A")
+        val r2 = receipt("id-2", "商户B")
+        showDashboard(historyOnly = true, receipts = listOf(r1, r2), onDeleteBatch = { deletedIds = it })
+
+        compose.onNodeWithText("批量选择").assertIsDisplayed().performClick()
+        compose.onNodeWithText("完成").assertIsDisplayed()
+        compose.onNodeWithText("全选").assertIsDisplayed()
+        compose.onNodeWithText("已选 0 笔").assertIsDisplayed()
+
+        compose.onNode(hasText("商户A") and hasClickAction()).performClick()
+        compose.onNodeWithText("已选 1 笔").assertIsDisplayed()
+        compose.onNodeWithText("已选 1 笔账单").assertIsDisplayed()
+
+        compose.onNodeWithText("全选").performClick()
+        compose.onNodeWithText("已选 2 笔").assertIsDisplayed()
+        compose.onNodeWithText("取消全选").assertIsDisplayed()
+
+        compose.onNodeWithText("删除选中的 2 笔").performClick()
+        compose.onNodeWithText("删除选中的 2 笔账单？").assertIsDisplayed()
+
+        compose.onNodeWithText("保留账单").performClick()
+        compose.onNodeWithText("删除选中的 2 笔账单？").assertDoesNotExist()
+        compose.onNodeWithText("已选 2 笔").assertIsDisplayed()
+
+        compose.onNodeWithText("删除选中的 2 笔").performClick()
+        compose.onNodeWithText("确认删除").performClick()
+        compose.runOnIdle {
+            assertEquals(setOf("id-1", "id-2"), deletedIds)
+        }
+    }
+
+    @Test fun batchSelectionCanBeExitedViaSystemBack() {
+        val r1 = receipt("id-1", "商户A")
+        showDashboard(historyOnly = true, receipts = listOf(r1))
+
+        compose.onNodeWithText("批量选择").performClick()
+        compose.onNodeWithText("完成").assertIsDisplayed()
+
+        pressSystemBack()
+        compose.onNodeWithText("批量选择").assertIsDisplayed()
+        compose.onNodeWithText("完成").assertDoesNotExist()
+    }
+
     private fun scrollToAmount(): SemanticsNodeInteraction {
         compose.onAllNodes(hasScrollToIndexAction()).onLast().performScrollToNode(hasTestTag("amount0"))
         return compose.onNodeWithTag("amount0")
     }
 
-    private fun showDashboard(historyOnly: Boolean, receipts: List<Receipt> = emptyList()) {
+    private fun showDashboard(historyOnly: Boolean, receipts: List<Receipt> = emptyList(), onDeleteBatch: (Set<String>) -> Unit = {}) {
         compose.setContent {
             TaxyRayTheme {
                 Surface(Modifier.fillMaxSize()) {
                     DashboardScreen(receipts, historyOnly, busy = false, loadError = null,
-                        onAdd = {}, onScan = {}, onDetail = {}, onAll = {}, onShareAll = {}, onDeleteSelection = {})
+                        onAdd = {}, onScan = {}, onDetail = {}, onAll = {}, onDeleteBatch = onDeleteBatch)
                 }
             }
         }

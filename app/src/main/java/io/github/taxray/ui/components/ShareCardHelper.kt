@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.annotation.RequiresApi
+import androidx.annotation.WorkerThread
 import androidx.core.content.FileProvider
 import java.io.File
 import java.io.IOException
@@ -82,6 +83,18 @@ class ShareCardHelper(context: Context) {
             }
         } catch (error: Throwable) {
             withContext(NonCancellable + Dispatchers.IO) { preparedFile?.delete() }
+            throw error
+        }
+    }
+
+    /** Call on Dispatchers.IO before launching the system camera on the main thread. */
+    @WorkerThread
+    fun createCameraUri(): Uri {
+        val file = File.createTempFile("capture-", ".jpg", cacheDirectory("camera"))
+        return try {
+            FileProvider.getUriForFile(appContext, "${appContext.packageName}.files", file)
+        } catch (error: Exception) {
+            file.delete()
             throw error
         }
     }

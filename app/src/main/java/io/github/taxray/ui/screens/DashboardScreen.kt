@@ -4,7 +4,6 @@ package io.github.taxray.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,9 +16,6 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.semantics.contentDescription
@@ -38,129 +34,227 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 @Composable
-fun DashboardScreen(receipts: List<Receipt>, historyOnly: Boolean, busy: Boolean, loadError: String?, onAdd: () -> Unit, onScan: () -> Unit, onDetail: (Receipt) -> Unit, onAll: () -> Unit, onShareAll: () -> Unit, onDeleteSelection: (List<Receipt>) -> Unit) {
+fun DashboardScreen(
+    receipts: List<Receipt>,
+    historyOnly: Boolean,
+    busy: Boolean,
+    loadError: String?,
+    onAdd: () -> Unit,
+    onScan: () -> Unit,
+    onDetail: (Receipt) -> Unit,
+    onAll: () -> Unit,
+    onDeleteBatch: (Set<String>) -> Unit = {},
+) {
     var query by rememberSaveable { mutableStateOf("") }
     var recentOnly by rememberSaveable { mutableStateOf(false) }
-    var selectedIds by rememberSaveable(historyOnly) { mutableStateOf(arrayListOf<String>()) }
-    BackHandler(enabled = selectedIds.isNotEmpty()) { selectedIds = arrayListOf() }
-    val haptics = LocalHapticFeedback.current
-    LaunchedEffect(receipts) { selectedIds = ArrayList(selectedIds.filter { id -> receipts.any { it.id == id } }) }
+    var batchMode by rememberSaveable { mutableStateOf(false) }
+    var selectedIds by rememberSaveable { mutableStateOf(emptySet<String>()) }
+    var showDeleteConfirm by rememberSaveable { mutableStateOf(false) }
     val totals = remember(receipts) { receipts.sumOf { it.totalAmountCents } to receipts.sumOf { it.totalTaxCents } }
     val cutoff = LocalDate.now().minusDays(29).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
     val visible = remember(receipts, query, recentOnly, historyOnly) {
         if (!historyOnly) receipts.take(5) else receipts.filter { (!recentOnly || it.timestamp >= cutoff) && (query.isBlank() || it.displayStoreName().contains(query, true) || it.items.any { line -> line.name.contains(query, true) }) }
     }
-    fun toggleSelection(receipt: Receipt) {
-        selectedIds = ArrayList(if (receipt.id in selectedIds) selectedIds - receipt.id else selectedIds + receipt.id)
+    if (historyOnly) {
+        BackHandler(enabled = batchMode) {
+            batchMode = false
+            selectedIds = emptySet()
+        }
     }
     Column(Modifier.fillMaxSize()) {
-    if (selectedIds.isNotEmpty()) Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
-        FlowRow(Modifier.fillMaxWidth().padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.Center) {
-            TextButton(onClick = { selectedIds = arrayListOf() }, enabled = !busy) { Text("取消选择") }
-            TextButton(onClick = { selectedIds = ArrayList((selectedIds + visible.map { it.id }).distinct()) }, enabled = !busy) { Text("全选当前列表") }
-            TextButton(onClick = { onDeleteSelection(receipts.filter { it.id in selectedIds }) }, enabled = !busy,
-                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error), modifier = Modifier.testTag("deleteSelectedReceipts")) {
-                Icon(Icons.Outlined.DeleteOutline, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("删除 ${selectedIds.size} 笔")
-            }
-        }
-    }
-    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 22.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        if (loadError != null) item { Text(loadError, color = MaterialTheme.colorScheme.error) }
-        if (!historyOnly) {
-            item {
-                OutlinedCard(shape = RoundedCornerShape(14.dp), colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
-                    Column(Modifier.fillMaxWidth().padding(22.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text("累计增值税估算", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                            IconButton(onClick = onShareAll, enabled = receipts.isNotEmpty() && !busy,
-                                modifier = Modifier.testTag("shareAllReceipts")) { Icon(Icons.Outlined.Share, "分享累计贡献卡", Modifier.size(20.dp)) }
-                        }
-                        RollingAmount(totals.second)
-                        DashedDivider()
-                        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text("累计消费", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(money(totals.first), style = AmountStyle.copy(fontSize = 16.sp))
+        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 22.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            if (loadError != null) item { Text(loadError, color = MaterialTheme.colorScheme.error) }
+            if (!historyOnly) {
+                item {
+                    OutlinedCard(shape = RoundedCornerShape(14.dp), colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
+                        Column(Modifier.fillMaxWidth().padding(22.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text("累计增值税估算", style = MaterialTheme.typography.bodyMedium)
+                                Text("CNY", style = AmountStyle.copy(fontSize = 11.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text("有效税额占比", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("${TaxCalculator.effectiveRate(totals.second, totals.first)}%", style = AmountStyle.copy(fontSize = 16.sp))
+                            RollingAmount(totals.second)
+                            DashedDivider()
+                            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text("累计消费", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(money(totals.first), style = AmountStyle.copy(fontSize = 16.sp))
+                                }
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text("有效税额占比", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("${TaxCalculator.effectiveRate(totals.second, totals.first)}%", style = AmountStyle.copy(fontSize = 16.sp))
+                                }
                             }
                         }
                     }
                 }
-            }
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = onAdd, enabled = !busy, modifier = Modifier.weight(1f).heightIn(min = 52.dp), shape = RoundedCornerShape(10.dp)) {
-                        Icon(Icons.Outlined.Add, null, Modifier.size(19.dp)); Spacer(Modifier.width(6.dp)); Text("记一笔")
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Button(onClick = onAdd, enabled = !busy, modifier = Modifier.weight(1f).heightIn(min = 52.dp), shape = RoundedCornerShape(10.dp)) {
+                            Icon(Icons.Outlined.Add, null, Modifier.size(19.dp)); Spacer(Modifier.width(6.dp)); Text("记一笔")
+                        }
+                        OutlinedButton(onClick = onScan, enabled = !busy, modifier = Modifier.weight(1f).heightIn(min = 52.dp), shape = RoundedCornerShape(10.dp)) {
+                            Icon(Icons.Outlined.DocumentScanner, null, Modifier.size(19.dp)); Spacer(Modifier.width(6.dp)); Text("识别小票")
+                        }
                     }
-                    OutlinedButton(onClick = onScan, enabled = !busy, modifier = Modifier.weight(1f).heightIn(min = 52.dp), shape = RoundedCornerShape(10.dp)) {
-                        Icon(Icons.Outlined.DocumentScanner, null, Modifier.size(19.dp)); Spacer(Modifier.width(6.dp)); Text("识别小票")
+                }
+                if (receipts.isNotEmpty()) item { TrendChart(receipts) }
+                item {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("最近账单", style = MaterialTheme.typography.titleMedium)
+                        TextButton(onClick = onAll) { Text("全部 ${receipts.size} 笔"); Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, Modifier.size(16.dp)) }
+                    }
+                }
+            } else {
+                item {
+                    OutlinedTextField(value = query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(), label = { Text("搜索商户或商品") }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, singleLine = true)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FilterChip(selected = !recentOnly, onClick = { recentOnly = false }, label = { Text("全部记录") })
+                        FilterChip(selected = recentOnly, onClick = { recentOnly = true }, label = { Text("近 30 天") })
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            if (batchMode) "已选 ${selectedIds.size} 笔" else "共 ${visible.size} 笔 · 按消费时间倒序",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (visible.isNotEmpty() || batchMode) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                if (batchMode) {
+                                    val visibleIds = visible.map { it.id }.toSet()
+                                    val allSelected = visibleIds.isNotEmpty() && selectedIds.containsAll(visibleIds)
+                                    TextButton(onClick = {
+                                        selectedIds = if (allSelected) selectedIds - visibleIds else selectedIds + visibleIds
+                                    }, enabled = !busy && visibleIds.isNotEmpty()) {
+                                        Text(if (allSelected) "取消全选" else "全选")
+                                    }
+                                }
+                                TextButton(onClick = {
+                                    batchMode = !batchMode
+                                    selectedIds = emptySet()
+                                }, enabled = !busy) {
+                                    Text(if (batchMode) "完成" else "批量选择")
+                                }
+                            }
+                        }
                     }
                 }
             }
-            if (receipts.isNotEmpty()) item { TrendChart(receipts) }
+            if (visible.isEmpty()) item {
+                Column(Modifier.fillMaxWidth().padding(vertical = 22.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(Icons.Outlined.ReceiptLong, null, Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
+                    if (receipts.isNotEmpty()) {
+                        Text("没有匹配的账单", style = MaterialTheme.typography.titleMedium)
+                        Text("试试其他关键词或时间范围", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                    }
+                    if (historyOnly && receipts.isEmpty()) TextButton(onClick = onAdd) { Text("添加第一笔账单") }
+                }
+            }
+            items(visible, key = { it.id }) { receipt ->
+                ReceiptSummary(
+                    receipt = receipt,
+                    onClick = {
+                        if (batchMode) {
+                            selectedIds = if (receipt.id in selectedIds) selectedIds - receipt.id else selectedIds + receipt.id
+                        } else {
+                            onDetail(receipt)
+                        }
+                    },
+                    modifier = Modifier.animateItem(),
+                    batchMode = batchMode,
+                    selected = receipt.id in selectedIds,
+                    onSelectChange = { checked ->
+                        selectedIds = if (checked) selectedIds + receipt.id else selectedIds - receipt.id
+                    }
+                )
+            }
             item {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("最近账单", style = MaterialTheme.typography.titleMedium)
-                    TextButton(onClick = onAll) { Text("全部 ${receipts.size} 笔"); Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, Modifier.size(16.dp)) }
-                }
-            }
-        } else {
-            item {
-                OutlinedTextField(value = query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(), label = { Text("搜索商户或商品") }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, singleLine = true)
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    FilterChip(selected = !recentOnly, onClick = { recentOnly = false }, label = { Text("全部记录") })
-                    FilterChip(selected = recentOnly, onClick = { recentOnly = true }, label = { Text("近 30 天") })
-                }
-                Text("共 ${visible.size} 笔 · 按消费时间倒序", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    "按所选税率估算价格中的增值税 不代表商户实际缴税额\n不作为报税或完税依据",
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 20.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
             }
         }
-        if (visible.isEmpty()) item {
-            Column(Modifier.fillMaxWidth().padding(vertical = 22.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Icon(Icons.Outlined.ReceiptLong, null, Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
-                if (receipts.isNotEmpty()) {
-                    Text("没有匹配的账单", style = MaterialTheme.typography.titleMedium)
-                    Text("试试其他关键词或时间范围", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+        if (historyOnly && batchMode && selectedIds.isNotEmpty()) {
+            Surface(tonalElevation = 3.dp, modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("已选 ${selectedIds.size} 笔账单", style = MaterialTheme.typography.bodyMedium)
+                    Button(
+                        onClick = { showDeleteConfirm = true },
+                        enabled = !busy,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Icon(Icons.Outlined.DeleteOutline, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("删除选中的 ${selectedIds.size} 笔")
+                    }
                 }
-                if (historyOnly && receipts.isEmpty()) TextButton(onClick = onAdd) { Text("添加第一笔账单") }
             }
-        }
-        items(visible, key = { it.id }) { receipt ->
-            ReceiptSummary(receipt, selected = receipt.id in selectedIds, selectionMode = selectedIds.isNotEmpty(), enabled = !busy,
-                onClick = { if (selectedIds.isNotEmpty()) toggleSelection(receipt) else onDetail(receipt) },
-                onLongClick = { haptics.performHapticFeedback(HapticFeedbackType.LongPress); toggleSelection(receipt) },
-                modifier = Modifier.animateItem())
-        }
-        item {
-            Text(
-                "按所选税率估算价格中的增值税 不代表商户实际缴税额\n不作为报税或完税依据",
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 20.dp),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
         }
     }
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("删除选中的 ${selectedIds.size} 笔账单？") },
+            text = { Text("删除后无法撤销 累计金额和税额同步更新") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    val toDelete = selectedIds
+                    selectedIds = emptySet()
+                    batchMode = false
+                    onDeleteBatch(toDelete)
+                }) {
+                    Text("确认删除", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("保留账单")
+                }
+            }
+        )
     }
 }
 
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun ReceiptSummary(receipt: Receipt, selected: Boolean, selectionMode: Boolean, enabled: Boolean, onClick: () -> Unit, onLongClick: () -> Unit, modifier: Modifier = Modifier) {
-    OutlinedCard(modifier = modifier.fillMaxWidth().testTag("receipt-${receipt.id}")
-        .combinedClickable(enabled = enabled, onClickLabel = if (selectionMode) "选择账单" else "查看账单", onLongClickLabel = "选择并删除账单", onClick = onClick, onLongClick = onLongClick),
-        shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
-        colors = CardDefaults.outlinedCardColors(containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)) {
+private fun ReceiptSummary(
+    receipt: Receipt,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    batchMode: Boolean = false,
+    selected: Boolean = false,
+    onSelectChange: (Boolean) -> Unit = {},
+) {
+    OutlinedCard(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
+        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                if (batchMode) {
+                    Checkbox(
+                        checked = selected,
+                        onCheckedChange = onSelectChange,
+                        modifier = Modifier.padding(end = 10.dp)
+                    )
+                }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text(receipt.displayStoreName(), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text("${dateText(receipt.timestamp)}  ·  ${receipt.items.size} 项", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                if (selectionMode) Checkbox(checked = selected, onCheckedChange = null)
-                else Icon(Icons.Outlined.ChevronRight, "查看账单明细", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (!batchMode) {
+                    Icon(Icons.Outlined.ChevronRight, "查看账单明细", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
             DashedDivider()
             FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

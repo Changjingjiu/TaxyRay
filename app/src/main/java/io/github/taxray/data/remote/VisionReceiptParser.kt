@@ -62,19 +62,11 @@ object VisionReceiptParser {
     private fun parseArgumentsInternal(arguments: String): VisionReceipt {
         require(arguments.length <= 1_500_000)
         val data = parseObject(arguments)
-        require(data.keys.all { it in setOf("store_name", "items", "declared_total", "receipt_datetime", "order_discount", "input_issue") })
-        val warnings = mutableListOf<String>()
-        data["input_issue"]?.let { issue ->
-            when (string(issue, 32)) {
-                "multiple_receipts" -> throw VisionException("照片包含不同账单 请分开识别 每次选择同一张小票的照片")
-                "unreadable" -> throw VisionException("商品明细看不清 请重新拍摄或选择更清晰的照片")
-                "unclear_overlap" -> warnings += "部分照片重叠不清 请检查是否重复列入了同一行商品"
-                else -> invalid()
-            }
-        }
+        require(data.keys.all { it in setOf("store_name", "items", "declared_total", "receipt_datetime", "order_discount") })
         val store = data["store_name"]?.let { string(it, 120) }.orEmpty()
         val items = data["items"] as? JsonArray ?: invalid()
         require(items.isNotEmpty() && items.size <= 1_000)
+        val warnings = mutableListOf<String>()
         val discount = data["order_discount"]?.takeUnless { it == JsonNull }?.let { value ->
             val fields = value as? JsonObject ?: invalid()
             require(fields.keys == setOf("amount", "evidence"))
@@ -210,9 +202,6 @@ object VisionReceiptParser {
 
     private inline fun <T> guarded(block: () -> T): T = try {
         block()
-    } catch (safeError: VisionException) {
-        // These messages are local constants, never arbitrary model text or response bodies.
-        throw safeError
     } catch (_: Exception) {
         invalid()
     }

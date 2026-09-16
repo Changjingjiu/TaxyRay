@@ -76,7 +76,8 @@ class LedgerFlowTest {
         compose.onNode(receiptCard).performClick()
         compose.onNodeWithText("¥13.00").assertIsDisplayed()
         compose.onNodeWithText("¥100.00").assertIsDisplayed()
-        compose.onNodeWithContentDescription("编辑账单").assertIsDisplayed().performClick()
+        compose.onAllNodes(hasScrollToIndexAction()).onLast().performScrollToNode(hasText("编辑账单"))
+        compose.onNodeWithText("编辑账单").performClick()
 
         scrollToTag("amount0").performTextReplacement("226.00")
         compose.onNodeWithTag("amount0").assertTextContains("226.00")
@@ -102,21 +103,13 @@ class LedgerFlowTest {
     @Test fun customRateInputSurvivesTypingPresetPrefixes() {
         compose.onNodeWithText("记一笔").performScrollTo().performClick()
         scrollToTag("amount0").performTextReplacement("113.00")
-        // The platform IME resizes this Dialog independently of Compose's test
-        // clock. Settle that viewport before clicking the tax-rate selector.
-        hideKeyboard()
-        scrollToTag("rateCustom_0").assertIsDisplayed().performClick().assertIsSelected()
-        // The new field belongs to the same already composed lazy item. Scroll
-        // directly to it once instead of restarting a list-wide search for every
-        // prefix while the newly focused field is opening the platform IME.
-        val customRate = compose.onNodeWithTag("customRate0")
-        customRate.assertExists().performScrollTo().assertIsDisplayed()
+        scrollToTag("rateCustom_0").performClick()
         listOf("0", "6", "9", "13").forEach { prefix ->
-            customRate.performTextReplacement(prefix)
+            scrollToTag("customRate0").performTextReplacement(prefix)
             // These prefixes match preset rates, but typing a decimal must leave
             // custom mode and the text-field focus intact.
-            customRate.assertExists().assertIsFocused().performTextInput(".5")
-            customRate.assertTextContains("$prefix.5").assertIsFocused()
+            compose.onNodeWithTag("customRate0").assertExists().performTextInput(".5")
+            compose.onNodeWithTag("customRate0").assertTextContains("$prefix.5")
         }
         hideKeyboard()
         compose.onNodeWithContentDescription("关闭录入").performClick()

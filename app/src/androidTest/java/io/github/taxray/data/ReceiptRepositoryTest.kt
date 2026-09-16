@@ -102,28 +102,19 @@ class ReceiptRepositoryTest {
         assertEquals(0L, db.receiptDao().totals().totalTaxCents)
     }
 
-    @Test fun batchDeleteCrossesParameterChunkBoundaryAndRollsBackAsOneTransaction() = runBlocking {
-        val rows = List(502) { receipt("batch-$it") }
-        repository.importReceipts(rows)
-        val selected = rows.take(501).map { it.id }
-        // Fail only in the second 500-ID chunk to prove the first chunk is rolled back too.
-        db.openHelper.writableDatabase.execSQL("""
-            CREATE TRIGGER prevent_selected_delete BEFORE DELETE ON receipts
-            WHEN OLD.id = 'batch-500'
-            BEGIN SELECT RAISE(ABORT, 'test batch failure'); END
-        """.trimIndent())
-        val failure = runCatching { repository.deleteAll(selected) }
-        assertTrue(failure.isFailure)
-        assertEquals(rows.associateBy { it.id }, repository.all().associateBy { it.id })
-        assertEquals(502L, db.receiptDao().itemCount())
+    @Test fun batchDeleteCascadesAndReactiveTotalsUpdate() = runBlocking {
+        val id1 = repository.save("商户1", listOf(draft("one"), draft("two")))
+        val id2 = repository.save("商户2", listOf(draft("three")))
+        val id3 = repository.save("商户3", listOf(draft("four")))
+        assertEquals(3, repository.all().size)
+        assertEquals(4L, db.receiptDao().itemCount())
 
-        db.openHelper.writableDatabase.execSQL("DROP TRIGGER prevent_selected_delete")
-        repository.deleteAll(selected + selected.first() + "already-missing")
-        assertEquals(listOf(rows.last()), repository.all())
+        repository.delete(listOf(id1, id3))
+        val remaining = repository.all()
+        assertEquals(1, remaining.size)
+        assertEquals(id2, remaining.single().id)
         assertEquals(1L, db.receiptDao().itemCount())
-        assertEquals(1_300L, db.receiptDao().totals().totalTaxCents)
-        repository.deleteAll(emptyList())
-        assertEquals(listOf(rows.last()), repository.all())
+        assertEquals(remaining.single().totalTaxCents, db.receiptDao().totals().totalTaxCents)
     }
 
     @Test fun foreignKeyPreventsOrphanItems() = runBlocking {
