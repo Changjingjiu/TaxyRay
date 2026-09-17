@@ -3,9 +3,11 @@
 package io.github.taxray.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.*
@@ -27,6 +29,7 @@ fun BillBatchReviewSheet(
     bills: List<ScannedBill>, warnings: List<String>, busy: Boolean,
     onReview: (String) -> Unit, onSkip: (String) -> Unit, onRestore: (String) -> Unit,
     onSupplement: (String) -> Unit, onAddImages: () -> Unit, onFinish: () -> Unit,
+    onBatchReview: () -> Unit = {},
 ) {
     var confirmClose by rememberSaveable { mutableStateOf(false) }
     val pending = bills.count { it.outcome == ScanBillOutcome.PENDING }
@@ -44,6 +47,33 @@ fun BillBatchReviewSheet(
             Text("待核对 $pending 笔  已入账 ${bills.count { it.outcome == ScanBillOutcome.SAVED }} 笔  已跳过 ${bills.count { it.outcome == ScanBillOutcome.SKIPPED }} 笔",
                 Modifier.padding(horizontal = 22.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (pending > 0) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 4.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("快速核对", style = MaterialTheme.typography.titleSmall)
+                            Text("自动核对已付款、金额明确的账单",
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Button(
+                            onClick = onBatchReview,
+                            enabled = !busy,
+                            modifier = Modifier.testTag("batchReviewButton")
+                        ) {
+                            Text("一键核对")
+                        }
+                    }
+                }
+            }
             LazyColumn(Modifier.weight(1f).testTag("billBatchList"), contentPadding = PaddingValues(22.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 item { Text("订单分别核对和入账 未付款的订单可跳过",
@@ -97,9 +127,51 @@ fun BillBatchReviewSheet(
             }
         }
     }
-    if (confirmClose) AlertDialog(onDismissRequest = { confirmClose = false },
-        title = { Text("结束本次识别？") },
-        text = { Text("还有 $pending 笔未核对 结束后将放弃这些草稿\n已确认入账的账单会保留") },
-        confirmButton = { TextButton(onClick = { confirmClose = false; onFinish() }) { Text("结束并放弃草稿") } },
-        dismissButton = { TextButton(onClick = { confirmClose = false }) { Text("继续核对") } })
+    if (confirmClose) AlertDialog(
+        onDismissRequest = { confirmClose = false },
+        title = { Text("账单未核对") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("还有 $pending 笔账单尚未核对。是否一键核对账单？")
+                Text(
+                    "已确认入账的账单会自动保留，直接结束将放弃未入账的草稿。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Button(
+                    onClick = {
+                        confirmClose = false
+                        onBatchReview()
+                    },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("confirmCloseBatchReview")
+                ) {
+                    Text("一键核对账单")
+                }
+                OutlinedButton(
+                    onClick = {
+                        confirmClose = false
+                        onFinish()
+                    },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("confirmCloseDiscard")
+                ) {
+                    Text("结束并放弃草稿", color = MaterialTheme.colorScheme.error)
+                }
+                TextButton(
+                    onClick = { confirmClose = false },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("confirmCloseCancel")
+                ) {
+                    Text("继续核对")
+                }
+            }
+        },
+        dismissButton = null
+    )
 }

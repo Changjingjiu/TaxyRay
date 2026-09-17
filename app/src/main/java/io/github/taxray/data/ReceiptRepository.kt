@@ -11,6 +11,7 @@ import io.github.taxray.data.local.AppDatabase
 import io.github.taxray.data.local.ReceiptEntity
 import io.github.taxray.data.local.ReceiptItemEntity
 import io.github.taxray.data.local.ReceiptWithItems
+import io.github.taxray.ReceiptDraft
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -43,6 +44,22 @@ class ReceiptRepository(private val database: AppDatabase) {
         checkLedgerCapacity(receipt.totalAmountCents)
         insert(receipt)
         receipt.id
+    }
+
+    suspend fun saveBatch(drafts: List<ReceiptDraft>): List<String> = database.withTransaction {
+        drafts.map { draft ->
+            val previous = draft.id?.let { requireNotNull(dao.find(it)) { "此账单已被删除，请重新创建" } }
+            val receipt = ReceiptValidation.validate(Receipt(
+                id = draft.id ?: UUID.randomUUID().toString(),
+                storeName = draft.storeName.trim(),
+                timestamp = draft.timestamp,
+                items = TaxCalculator.calculateItems(draft.settledItems()),
+            ))
+            if (previous != null) dao.deleteReceipt(receipt.id)
+            checkLedgerCapacity(receipt.totalAmountCents)
+            insert(receipt)
+            receipt.id
+        }
     }
 
     suspend fun delete(id: String) = dao.deleteReceipt(id)
