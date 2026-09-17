@@ -5,8 +5,8 @@
 <h1 align="center">TaxyRay</h1>
 
 <p align="center">
-  <strong>接入 AI 识别账单 自动估算消费价格中的税额</strong><br/>
-  拍照或选图 识别商品与实付金额 看清每一项的价与税
+  <strong>AI 读懂账单 看见消费里的税</strong><br/>
+  拍照或选图识别商品与实付 逐项拆出价与税
 </p>
 
 <p align="center">
@@ -18,54 +18,48 @@
 
 <p align="center">
   <a href="https://github.com/Changjingjiu/TaxyRay/releases/latest"><strong>下载 Android 版</strong></a> ·
-  <a href="#开始使用">开始使用</a> ·
+  <a href="README.en.md">English</a> ·
   <a href="CHANGELOG.md">更新记录</a> ·
   <a href="https://github.com/Changjingjiu/TaxyRay/issues">反馈问题</a>
 </p>
 
-## 买东西时 价格里含了多少税
+## 这是什么
 
-TaxyRay 想回答的就是这个问题
+接入你自己的 AI 服务,TaxyRay 就能读懂小票、购物订单截图和电子账单,把每笔消费的实付金额按税率拆成不含税金额与税额,顺手帮你记账。AI 只负责读账单,金额和税额都在本机用精确十进制和整数分计算,确认之后才入账。
 
-接入你自己的 AI 服务 拍摄小票或从相册选择购物订单截图和电子账单 AI 分别提取每笔订单的商品 实付金额 付款状态与优惠信息 并建议商品分类 应用自动完成逐项价税拆分 你可以逐笔查看依据 调整金额与税率 再确认入账
+> 估算的是消费价格里包含的增值税,不是所有税种的合计,也不代表商户实际缴库的税款
 
-**AI 负责读懂账单 本机负责精确计算** 记账只是保存和回看结果的方式
+## 功能
 
-> 当前估算的是消费价格中包含的增值税 不是所有税种的合计 也不代表商户实际缴库的税款
+- **账单识别** 小票、购物订单截图和电子账单 每轮最多 5 张图片 30 笔账单
+- **逐项价税拆分** 13% / 9% / 6% / 0% 与自定义税率 附计算过程与税率依据
+- **优惠与抹零分摊** 整单优惠按商品金额比例分摊 尾差用最大余数法补齐
+- **一键核对** 已付款、金额明确的账单批量入账 与本机账本和同批账单查重
+- **付款状态复核** 未付款订单可跳过 状态不明确时需核实并填写最终实付
+- **贡献卡** 分享单笔或累计税额估算 纸本与松石绿两套模板
 
-## 从账单图片到税额明细
+## 界面
 
 <table>
   <tr>
-    <th width="50%">AI 账单算税</th>
-    <th width="50%">整单优惠与抹零</th>
+    <td align="center" width="50%"><img src="docs/assets/screen-dashboard.png" alt="总览页 累计增值税估算 24.58 元" width="100%" /></td>
+    <td align="center" width="50%"><img src="docs/assets/screen-scan-batch.png" alt="识别列表 三笔账单 顶部有一键核对" width="100%" /></td>
   </tr>
   <tr>
-    <td><img src="docs/assets/overview.png" alt="旧版总览中的累计增值税估算与识别入口" width="100%" /></td>
-    <td><img src="docs/assets/receipt-review.png" alt="小票核对页 商品合计59.24元 实付59.20元 可分摊4分优惠" width="100%" /></td>
+    <td align="center">累计税额估算与最近账单</td>
+    <td align="center">连续识别多笔账单 逐笔核对或一键核对</td>
   </tr>
   <tr>
-    <td align="center">拍照或选图 自动识别商品与金额</td>
-    <td align="center">按实际支付金额计算 优惠也算清楚</td>
+    <td align="center"><img src="docs/assets/screen-review.png" alt="核对页 商品合计59.24元 实付59.20元 分摊4分优惠" width="100%" /></td>
+    <td align="center"><img src="docs/assets/screen-detail.png" alt="账单详情 实付113元 不含税100.43元 税额12.57元" width="100%" /></td>
+  </tr>
+  <tr>
+    <td align="center">整单优惠与抹零 按实付分摊</td>
+    <td align="center">每项都给出不含税金额与税额</td>
   </tr>
 </table>
 
-<sub>v0.2.2 模拟器截图 使用演示数据 核对页为预置演示草稿 不代表一次真实 AI 请求 以下识别行为按 v0.3.3 说明 首页入口现为“识别账单”</sub>
-
-| 核心能力 | 做了什么 |
-| --- | --- |
-| **AI 账单识别** | 支持小票 购物订单截图和电子账单 每轮最多 5 张 30 笔账单 合计 1000 项 多笔订单分别核对与入账 |
-| **付款状态复核** | 优先采用最终实付 未付款订单可跳过 付款不明确时需核实后确认 不把待付款的实付 0 当成零元消费 |
-| **重复项确认** | 同一笔账单内相同或相似商品由你选择保留一个或全部保留 独立订单不因同店同价合并 入账前也会提醒疑似已有账单 |
-| **自动税额估算** | 逐项计算不含税金额与税额 展示计算过程 支持 13% / 9% / 6% / 0% 与自定义税率 |
-| **优惠与抹零分摊** | 比如商品合计 ¥59.24 实付 ¥59.20 确认后将 ¥0.04 按金额比例分摊到各项 再计算税额 |
-| **税率依据** | 每档税率单独展示 点击商品类别查看典型代表与适用条件 |
-| **贡献卡** | 分享单笔或全部账单的累计税额估算 纸本与松石绿两套模板 |
-| **快速整理** | 详情顶部直接编辑 长按卡片多选 确认后批量删除 |
-
-## 把结果留成一张卡
-
-每一笔理性消费都在支撑社会前行
+<sub>Android 16 模拟器截图 使用演示数据 不代表一次真实 AI 识别</sub>
 
 <table>
   <tr><th width="50%">纸本</th><th width="50%">松石绿</th></tr>
@@ -75,100 +69,33 @@ TaxyRay 想回答的就是这个问题
   </tr>
 </table>
 
-<sub>应用导出的演示图片 导出宽度至少 1080 像素 生成时的一次触觉和彩纸反馈不进入图片</sub>
+<sub>导出宽度至少 1080 像素 生成时的触觉与彩纸反馈不进入图片</sub>
 
 ## 开始使用
 
-1. 从 [Releases](https://github.com/Changjingjiu/TaxyRay/releases/latest) 下载 **TaxyRay APK** 安装到 Android 8.0 及以上设备
-2. 在 **设置 → 账单识别AI** 填写服务地址 支持图片与工具调用的模型 以及自己的 API Key
-3. 回到首页 点击 **识别账单** 查看服务地址与费用说明 选择 **拍照并识别** 在相机确认照片后开始识别 相册每轮可选 1 至 5 张 排好顺序后点击发送 一张图可以包含多笔购物订单
-4. 识别后在列表逐笔选择 **核对账单** 或 **跳过** 每轮最多返回 30 笔 合计 1000 个商品项 未付款订单可以先跳过 付款状态不明确时需要核实并勾选确认 若未付订单后来已经付款 还须填写大于 0 的最终实付
-5. 发现同一账单内的相似商品时选择 **删除重复项** 保留指定的一项 或 **全部保留** 核对消费时间 金额与税率 有尚未计入金额的整单优惠时确认分摊 最后逐笔 **确认入账** 返回列表会保留草稿修改
-6. **继续选图** 默认新增独立账单 长账单缺少一部分时在该笔上点 **补拍这笔** 只有补拍结果为一笔且信息不冲突才合并 如果补拍识别出多笔 会分别保留并提醒检查重复 已修改或完成的账单不能继续补拍
+1. 从 [Releases](https://github.com/Changjingjiu/TaxyRay/releases/latest) 下载 APK 安装到 Android 8.0 及以上设备
+2. 在 **设置 → 账单识别AI** 填写服务地址、支持图片与工具调用的模型 以及你自己的 API Key
+3. 回到首页点 **识别账单** 拍照或从相册选图 识别后逐笔核对再确认入账
 
-每轮识别都会访问你配置的服务 可能产生 API 费用 部分内容看不清会提示对应范围 并保留可读账单 后一轮失败不会丢掉前面的结果 可以重新选图或先核对已有内容
+不想用 AI 也可以手动 **记一笔** 本地记账和计算不需要联网
 
-识别结果只在当前应用进程的内存中 退出本次识别会放弃未保存草稿 系统结束进程后需重新识别 已经确认入账的账单会保留 未识别到消费日期时会提示你检查默认时间 截图顶部手机时钟不会当成订单日期
+[识别规则与边界](docs/AI_RECOGNITION.md) · [算法与边界](docs/ALGORITHM.md) · [税率依据](docs/TAX_POLICY.md)
 
-手动录入和本地计算无需联网 保存后可分享单笔或累计贡献卡
+## 数据与隐私
 
-<details>
-<summary><strong>账单 AI 配置示例</strong></summary>
+- 账本 识别草稿和 API 配置都只存在本机 没有账号 广告或遥测
+- API Key 由 Android Keystore 加密保存 密钥不进入备份
+- 只有你主动识别时才联网 请求发往你自己配置的服务
+- 备份是明文 JSON / CSV 换设备前请自行保存
 
-| 设置项 | 填写示例 |
-| --- | --- |
-| API 地址 | `https://api.deepseek.com` |
-| 模型名称 | `deepseek-flash` |
-| API Key | 你自己的服务密钥 |
-| 自动追加 `/chat/completions` | 开启 |
+[隐私说明](docs/PRIVACY.md) · [安全问题反馈](SECURITY.md) · [更新与签名](docs/UPDATES.md)
 
-其他服务须支持图片输入与 Function Calling 也可以关闭自动追加并填写完整请求地址
+## 开发
 
-测试连接只验证简短文本请求 不代表模型已经通过图片识别测试 拍照模式在相机确认照片后发送 相册模式在点击发送后上传
-
-[识别规则与边界](docs/AI_RECOGNITION.md)
-
-</details>
-
-<details>
-<summary><strong>保存 回看与备份</strong></summary>
-
-识别结果由你确认后才入库 打开账单即可在顶部编辑 长按卡片可多选并批量删除 也可以离线手动录入
-
-首页累计卡包含全部已保存账单 不受账本搜索或时间筛选影响
-
-疑似已入账时可以返回核对 仍然录入 或保留已有账单并放弃本次重复入账 应用不会自动合并或删除旧账单
-
-数据保存在本机 没有账号 广告或遥测 API 配置通过 Android Keystore 加密 密钥不进入备份
-
-支持导出和导入 JSON / CSV 备份为明文 换设备前自行保存 目前没有云端账本同步
-
-[隐私说明](docs/PRIVACY.md) · [安全问题反馈](SECURITY.md)
-
-</details>
-
-<details>
-<summary><strong>旧版本如何更新</strong></summary>
-
-**0.2.1 及更早版本需要下载最新 APK 覆盖安装一次 不要先卸载**
-
-这次仓库改名 同时更换了更新地址 旧版更新器不能跟随这次地址变更 安装身份和签名保持不变
-
-0.2.2 起使用新仓库 可通过 **设置 → 检查更新 → 下载更新 → 安装更新** 获取后续版本 更新包经过大小 SHA-256 包名 版本和签名校验 最后由 Android 确认安装
-
-[更新与签名说明](docs/UPDATES.md)
-
-</details>
-
-## 计算可以逐项核对
-
-```text
-税额 = 含税金额 × 税率 ÷ (1 + 税率)
-不含税金额 = 含税金额 − 税额
-```
-
-实付 **¥113.00** 按 **13%** 拆分 得到税额 **¥13.00** 和不含税金额 **¥100.00**
-
-每个商品单独四舍五入到分 再汇总整单 金额使用精确十进制和整数分计算 不让 AI 直接决定最终计算结果
-
-整单优惠按商品金额比例分摊 尾差用最大余数法补齐 不把差额塞到最后一项 单品已有会员价时直接使用折后金额 仅部分商品参与优惠时修改对应商品
-
-所选税率不一定等于商户实际适用税率 结果仅供个人参考 贡献卡不是发票 完税证明或申报依据
-
-[算法与边界](docs/ALGORITHM.md) · [税率依据](docs/TAX_POLICY.md) · [税率分类说明](docs/TAX_RATE_GUIDE.md)
-
-## 开发与贡献
-
-Kotlin · Jetpack Compose · Room · OkHttp
-
-配置 **JDK 17** 和 **Android SDK 35** 后运行
+Kotlin · Jetpack Compose · Room · OkHttp 需要 JDK 17 和 Android SDK 35
 
 ```bash
 ./gradlew :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
 ```
 
-[构建与测试](docs/DEVELOPMENT.md) · [参与贡献](CONTRIBUTING.md) · [发行打包](docs/UPDATES.md#维护者打包)
-
-项目采用 [MIT License](LICENSE) 欢迎提交问题和 Pull Request
-
-第三方组件及许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+[构建与测试](docs/DEVELOPMENT.md) · [参与贡献](CONTRIBUTING.md) · [MIT License](LICENSE) · [第三方组件](THIRD_PARTY_NOTICES.md)
