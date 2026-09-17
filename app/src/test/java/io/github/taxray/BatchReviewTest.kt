@@ -171,4 +171,125 @@ class BatchReviewTest {
         assertEquals(2, summary.eligible.size)
         assertEquals(1, summary.ineligible.size)
     }
+
+    @Test
+    fun planBooksBalancedPaidBillAndLeavesUnpaidOneForManualReview() {
+        val summary = BatchReview.plan(
+            pendingBills = listOf(
+                scannedBill("paid", storeName = "全家便利店", amount = "12.50"),
+                scannedBill("unpaid", storeName = "美团外卖", amount = "28.00", paymentStatus = PaymentStatus.UNPAID),
+            ),
+            existingReceipts = emptyList(),
+        )
+        assertEquals(listOf("paid"), summary.eligible.map { it.billId })
+        assertEquals(listOf("unpaid"), summary.ineligible.map { it.billId })
+        assertEquals("待付款订单需人工核实", summary.ineligible.single().reason)
+        assertEquals(1250L, summary.totalEligibleCents)
+        assertEquals(0, summary.withDiscountsCount)
+    }
+
+    @Test
+    fun planRejectsTheSecondCopyOfOneOrderInsideTheSameBatch() {
+        val summary = BatchReview.plan(
+            pendingBills = listOf(
+                scannedBill("copy-1", storeName = "山姆会员商店", amount = "99.00"),
+                scannedBill("copy-2", storeName = "山姆会员商店", amount = "99.00"),
+            ),
+            existingReceipts = emptyList(),
+        )
+        assertEquals(listOf("copy-1"), summary.eligible.map { it.billId })
+        assertEquals(listOf("copy-2"), summary.ineligible.map { it.billId })
+        assertEquals("与本次识别的其他账单疑似重复", summary.ineligible.single().reason)
+    }
+
+    @Test
+    fun planKeepsDifferentOrdersOfOneBatchEligible() {
+        val summary = BatchReview.plan(
+            pendingBills = listOf(
+                scannedBill("a", storeName = "盒马鲜生", amount = "30.00", receiptDateTime = "2026-09-17T09:15:00"),
+                scannedBill("b", storeName = "苏宁易购", amount = "88.00", receiptDateTime = "2026-09-17T10:45:00"),
+            ),
+            existingReceipts = emptyList(),
+        )
+        assertEquals(listOf("a", "b"), summary.eligible.map { it.billId })
+        assertTrue(summary.ineligible.isEmpty())
+        assertEquals(11800L, summary.totalEligibleCents)
+    }
+
+    @Test
+    fun planRejectsBillThatIsAlreadyInTheLedger() {
+        val bill = scannedBill("again", storeName = "山姆会员商店", amount = "99.00")
+        val existing = Receipt("ledger-1", bill.draft.storeName, bill.draft.timestamp, bill.draft.calculated())
+
+        val summary = BatchReview.plan(listOf(bill), listOf(existing))
+
+        assertTrue(summary.eligible.isEmpty())
+        assertEquals("疑似与已有账单重复", summary.ineligible.single().reason)
+    }
+
+    @Test
+    fun planAllocatesThePaidTotalBeforeBooking() {
+        val summary = BatchReview.plan(
+            pendingBills = listOf(scannedBill("discount", storeName = "天猫超市", amount = "30.00", declaredTotal = "20.00")),
+            existingReceipts = emptyList(),
+        )
+        val booked = summary.eligible.single()
+        assertTrue(booked.hasAllocatedDiscount)
+        assertEquals(2000L, booked.settledDraft.calculated().sumOf { it.breakdown.amountCents })
+        assertEquals(2000L, summary.totalEligibleCents)
+    }
+
+    @Test
+    fun planRejectsBillWithDuplicateItemRows() {
+        val session = ReceiptScanSession().append(
+            VisionReceipt(
+                storeName = "美团外卖",
+                items = listOf(
+                    DraftItem(name = "招牌牛肉面大碗", amount = "28.00"),
+                    DraftItem(name = "招牌牛肉面大碗", amount = "28.00"),
+                ),
+                declaredTotal = "56.00",
+                paymentStatus = PaymentStatus.PAID,
+            )
+        )
+        val summary = BatchReview.plan(listOf(ScannedBill(id = "dup-items", session = session)), emptyList())
+        assertTrue(summary.eligible.isEmpty())
+        assertEquals("含疑似重复商品需确认", summary.ineligible.single().reason)
+    }
+
+    @Test
+    fun planBooksUnknownPaymentStatusOnlyAfterTheUserConfirms() {
+        val session = ReceiptScanSession().append(
+            VisionReceipt(
+                storeName = "淘宝",
+                items = listOf(DraftItem(name = "手机壳", amount = "25.00")),
+                declaredTotal = "25.00",
+                paymentStatus = PaymentStatus.UNKNOWN,
+            )
+        )
+        val confirmed = ScannedBill(id = "confirmed", session = session, draft = session.draft().copy(paymentConfirmed = true))
+
+        assertEquals(listOf("confirmed"), BatchReview.plan(listOf(confirmed), emptyList()).eligible.map { it.billId })
+        assertEquals(listOf("guessed"), BatchReview.plan(listOf(ScannedBill(id = "guessed", session = session)), emptyList()).ineligible.map { it.billId })
+    }
+
+    private fun scannedBill(
+        id: String,
+        storeName: String,
+        amount: String,
+        declaredTotal: String = amount,
+        paymentStatus: PaymentStatus = PaymentStatus.PAID,
+        receiptDateTime: String = "2026-09-17T14:30:00",
+    ): ScannedBill = ScannedBill(
+        id = id,
+        session = ReceiptScanSession().append(
+            VisionReceipt(
+                storeName = storeName,
+                items = listOf(DraftItem(name = "$storeName 商品", amount = amount)),
+                declaredTotal = declaredTotal,
+                receiptDateTime = receiptDateTime,
+                paymentStatus = paymentStatus,
+            )
+        ),
+    )
 }
