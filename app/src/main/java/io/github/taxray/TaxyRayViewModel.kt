@@ -12,8 +12,6 @@ import io.github.taxray.data.remote.ReceiptImageBatch
 import io.github.taxray.data.remote.CameraCaptureStore
 import io.github.taxray.data.remote.VisionAgentService
 import io.github.taxray.data.remote.VisionBatch
-import io.github.taxray.data.remote.PaymentStatus
-import io.github.taxray.data.remote.VisionReceipt
 import io.github.taxray.data.security.ApiSettings
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
@@ -22,18 +20,6 @@ import java.util.UUID
 
 data class DuplicateReceiptReview(val draft: ReceiptDraft, val matches: List<Receipt>, val continueAdding: Boolean)
 data class ScanDuplicateReview(val draft: ReceiptDraft, val groups: List<DuplicateItemGroup>, val groupIndex: Int = 0)
-
-data class BatchReviewEligibleItem(val billId: String, val settledDraft: ReceiptDraft, val hasAllocatedDiscount: Boolean)
-data class BatchReviewIneligibleItem(val billId: String, val draft: ReceiptDraft, val reason: String)
-data class BatchReviewSummary(
-    val eligible: List<BatchReviewEligibleItem>,
-    val ineligible: List<BatchReviewIneligibleItem>,
-) {
-    val totalEligibleCents: Long
-        get() = eligible.sumOf { it.settledDraft.calculated().sumOf { item -> item.breakdown.amountCents } }
-    val withDiscountsCount: Int
-        get() = eligible.count { it.hasAllocatedDiscount }
-}
 
 class TaxyRayViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as TaxyRayApplication
@@ -271,66 +257,8 @@ class TaxyRayViewModel(application: Application) : AndroidViewModel(application)
         val pendingBills = scanBills.filter { it.outcome == ScanBillOutcome.PENDING }
         if (pendingBills.isEmpty()) return
         work("正在分析待核对账单") {
-            val existingReceipts = withContext(Dispatchers.Default) { repository.all() }
-            val eligible = mutableListOf<BatchReviewEligibleItem>()
-            val ineligible = mutableListOf<BatchReviewIneligibleItem>()
-
-            for (bill in pendingBills) {
-                val draft = bill.draft
-                // 1. Payment status check
-                if (draft.paymentStatus != PaymentStatus.PAID && !draft.paymentConfirmed) {
-                    val reason = if (draft.paymentStatus == PaymentStatus.UNPAID) "待付款订单需人工核实" else "付款状态不明确需人工核实"
-                    ineligible += BatchReviewIneligibleItem(bill.id, draft, reason)
-                    continue
-                }
-
-                // 2. Intra-bill duplicate items check
-                val itemDuplicates = withContext(Dispatchers.Default) { ReceiptItemDuplicates.find(draft.items) }
-                if (itemDuplicates.isNotEmpty()) {
-                    ineligible += BatchReviewIneligibleItem(bill.id, draft, "含疑似重复商品需确认")
-                    continue
-                }
-
-                // 3. Amount and discount settlement check
-                val (settledDraft, hasDiscount, amountError) = run {
-                    if (draft.validationMessage() == null) {
-                        Triple(draft, false, null)
-                    } else if (draft.declaredTotal.isNotBlank()) {
-                        val candidate = runCatching { draft.allocateDiscount() }.getOrNull()
-                        if (candidate != null && candidate.validationMessage() == null) {
-                            Triple(candidate, true, null)
-                        } else {
-                            Triple(null, false, draft.validationMessage() ?: "实付金额与明细合计不符")
-                        }
-                    } else {
-                        Triple(null, false, draft.validationMessage() ?: "账单金额未确认")
-                    }
-                }
-
-                if (settledDraft == null) {
-                    ineligible += BatchReviewIneligibleItem(bill.id, draft, amountError ?: "金额校验未通过")
-                    continue
-                }
-
-                // 4. Check for duplicates in existing ledger
-                val candidateReceipt = Receipt(
-                    id = UUID.randomUUID().toString(),
-                    storeName = settledDraft.storeName,
-                    timestamp = settledDraft.timestamp,
-                    items = settledDraft.calculated()
-                )
-                val matches = withContext(Dispatchers.Default) {
-                    ReceiptDuplicates.find(candidateReceipt, existingReceipts)
-                }
-                if (matches.isNotEmpty()) {
-                    ineligible += BatchReviewIneligibleItem(bill.id, draft, "疑似与已有账单重复")
-                    continue
-                }
-
-                eligible += BatchReviewEligibleItem(bill.id, settledDraft, hasDiscount)
-            }
-
-            batchReviewSummary = BatchReviewSummary(eligible, ineligible)
+            val existingReceipts = repository.all()
+            batchReviewSummary = withContext(Dispatchers.Default) { BatchReview.plan(pendingBills, existingReceipts) }
         }
     }
     fun dismissBatchReview() {

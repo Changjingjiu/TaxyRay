@@ -31,7 +31,15 @@ class ReceiptRepository(private val database: AppDatabase) {
         items: List<DraftItem>,
         id: String? = null,
         timestamp: Long? = null,
-    ): String = database.withTransaction {
+    ): String = database.withTransaction { upsert(id, storeName, items, timestamp) }
+
+    /** One transaction books the whole batch: a rejected draft rolls back every other draft with it. */
+    suspend fun saveBatch(drafts: List<ReceiptDraft>): List<String> = database.withTransaction {
+        drafts.map { upsert(it.id, it.storeName, it.settledItems(), it.timestamp) }
+    }
+
+    /** Caller owns the transaction; single and batch writes share one validation and capacity path. */
+    private suspend fun upsert(id: String?, storeName: String, items: List<DraftItem>, timestamp: Long?): String {
         val previous = id?.let { requireNotNull(dao.find(it)) { "此账单已被删除，请重新创建" } }
         val receipt = ReceiptValidation.validate(Receipt(
             id = id ?: UUID.randomUUID().toString(),
@@ -43,23 +51,7 @@ class ReceiptRepository(private val database: AppDatabase) {
         if (previous != null) dao.deleteReceipt(receipt.id)
         checkLedgerCapacity(receipt.totalAmountCents)
         insert(receipt)
-        receipt.id
-    }
-
-    suspend fun saveBatch(drafts: List<ReceiptDraft>): List<String> = database.withTransaction {
-        drafts.map { draft ->
-            val previous = draft.id?.let { requireNotNull(dao.find(it)) { "此账单已被删除，请重新创建" } }
-            val receipt = ReceiptValidation.validate(Receipt(
-                id = draft.id ?: UUID.randomUUID().toString(),
-                storeName = draft.storeName.trim(),
-                timestamp = draft.timestamp,
-                items = TaxCalculator.calculateItems(draft.settledItems()),
-            ))
-            if (previous != null) dao.deleteReceipt(receipt.id)
-            checkLedgerCapacity(receipt.totalAmountCents)
-            insert(receipt)
-            receipt.id
-        }
+        return receipt.id
     }
 
     suspend fun delete(id: String) = dao.deleteReceipt(id)

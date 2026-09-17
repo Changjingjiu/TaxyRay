@@ -11,6 +11,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.taxray.core.DraftItem
 import io.github.taxray.core.Receipt
 import io.github.taxray.core.TaxCalculator
+import io.github.taxray.ReceiptDraft
 import io.github.taxray.data.local.AppDatabase
 import io.github.taxray.data.local.ReceiptEntity
 import io.github.taxray.data.local.ReceiptItemEntity
@@ -84,6 +85,30 @@ class ReceiptRepositoryTest {
         val before = repository.all()
         assertTrue(runCatching { repository.save("错误账单", listOf(draft("bad", "-1")), id) }.isFailure)
         assertEquals(before, repository.all())
+    }
+
+    @Test fun batchSaveBooksEveryDraftAndTrimsStoreNames() = runBlocking {
+        val ids = repository.saveBatch(listOf(
+            ReceiptDraft(storeName = " 超市 ", items = listOf(draft("one")), timestamp = 1_600_000_000_000L),
+            ReceiptDraft(storeName = "便利店", items = listOf(draft("two", "226")), timestamp = 1_600_000_100_000L),
+        ))
+        assertEquals(2, ids.distinct().size)
+        assertEquals(setOf("超市", "便利店"), repository.all().map { it.storeName }.toSet())
+        assertEquals(3900L, db.receiptDao().totals().totalTaxCents)
+    }
+
+    @Test fun batchSaveRollsBackEveryDraftWhenOneDraftIsRejected() = runBlocking {
+        repository.save("已有商户", listOf(draft("kept")))
+        val before = repository.all()
+        val failure = runCatching {
+            repository.saveBatch(listOf(
+                ReceiptDraft(storeName = "新商户", items = listOf(draft("good"))),
+                ReceiptDraft(storeName = "错误商户", items = listOf(draft("bad", "-1"))),
+            ))
+        }
+        assertTrue(failure.isFailure)
+        assertEquals(before, repository.all())
+        assertEquals(1L, db.receiptDao().itemCount())
     }
 
     @Test fun deleteCascadesAndReactiveTotalsUpdate() = runBlocking {

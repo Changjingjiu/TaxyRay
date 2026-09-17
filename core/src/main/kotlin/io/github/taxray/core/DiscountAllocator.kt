@@ -26,6 +26,7 @@ object DiscountAllocator {
         val denominator = BigInteger.valueOf(total)
         val numerators = original.map { BigInteger.valueOf(it).multiply(BigInteger.valueOf(paidTotalCents)) }
         val quotientRemainder = numerators.map { it.divideAndRemainder(denominator) }
+        // Every quotient is at most paidTotal, so it always fits a Long and toLong() stays exact.
         val paid = quotientRemainder.map { it[0].toLong() }.toMutableList()
         val remaining = Math.toIntExact(paidTotalCents - paid.sum())
         // Equal remainders use ticket order. No random tie-breaks or last-row dumping.
