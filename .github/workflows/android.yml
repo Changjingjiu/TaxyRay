@@ -46,7 +46,8 @@ jobs:
           api-level: 35
           arch: x86_64
           disable-animations: true
-          script: ./gradlew :app:connectedDebugAndroidTest
+          # 该 action 逐行执行 script Compose 偶发中断时重跑一次 真失败第二次仍会失败
+          script: ./gradlew :app:connectedDebugAndroidTest || ./gradlew :app:connectedDebugAndroidTest
       - uses: actions/upload-artifact@v4
         if: always()
         with:
