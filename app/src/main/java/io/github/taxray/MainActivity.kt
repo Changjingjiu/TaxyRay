@@ -271,7 +271,11 @@ fun TaxyRayApp(vm: TaxyRayViewModel = viewModel()) {
     if (vm.scanReviewReady && !vm.busy && vm.editor == null && vm.scanDuplicateReview == null && vm.scanError == null) {
         BillBatchReviewSheet(vm.scanBills, vm.scanWarnings, vm.busy,
             onReview = vm::reviewScanBill, onSkip = vm::skipScanBill, onRestore = vm::restoreScanBill,
-            onSupplement = { continueWithImages(it) }, onAddImages = { continueWithImages() }, onFinish = vm::discardScan)
+            onSupplement = { continueWithImages(it) }, onAddImages = { continueWithImages() }, onFinish = vm::discardScan,
+            onBatchReview = vm::prepareBatchReview)
+    }
+    vm.batchReviewSummary?.let { summary ->
+        BatchReviewSummaryDialog(summary, vm.busy, vm::confirmBatchReview, vm::dismissBatchReview)
     }
     if (!vm.busy) vm.scanError?.let { message ->
         ScanRecognitionFailureDialog(message, vm.scanBills.isNotEmpty(),

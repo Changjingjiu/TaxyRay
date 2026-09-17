@@ -10,12 +10,16 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import io.github.taxray.BatchReviewEligibleItem
+import io.github.taxray.BatchReviewIneligibleItem
+import io.github.taxray.BatchReviewSummary
 import io.github.taxray.ReceiptScanSession
 import io.github.taxray.ScanBillOutcome
 import io.github.taxray.ScannedBill
 import io.github.taxray.core.DraftItem
 import io.github.taxray.data.remote.PaymentStatus
 import io.github.taxray.data.remote.VisionReceipt
+import io.github.taxray.ui.screens.BatchReviewSummaryDialog
 import io.github.taxray.ui.screens.BillBatchReviewSheet
 import io.github.taxray.ui.screens.ScannerReviewSheet
 import io.github.taxray.ui.theme.TaxyRayTheme
@@ -90,19 +94,35 @@ class BillBatchReviewTest {
 
     @Test fun finishingWithPendingDraftsRequiresConfirmationAndCanReturnToReview() {
         var finishCount = 0
+        var batchReviewCount = 0
         compose.setContent {
             TaxyRayTheme {
                 BillBatchReviewSheet(listOf(bill("pending"), bill("saved", outcome = ScanBillOutcome.SAVED)), emptyList(), busy = false,
+                    onReview = {}, onSkip = {}, onRestore = {}, onSupplement = {}, onAddImages = {}, onFinish = { finishCount++ },
+                    onBatchReview = { batchReviewCount++ })
+            }
+        }
+        compose.onNodeWithTag("finishBillBatch").performClick()
+        compose.onNodeWithText("账单未核对").assertIsDisplayed()
+        compose.onNodeWithText("还有 1 笔账单尚未核对。是否一键核对账单？").assertIsDisplayed()
+        compose.onNodeWithTag("confirmCloseBatchReview").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(0, finishCount); assertEquals(0, batchReviewCount) }
+        compose.onNodeWithText("继续核对").performClick()
+        compose.onNodeWithTag("reviewBill-pending").assertIsDisplayed()
+        compose.onNodeWithContentDescription("关闭账单复核").performClick()
+        compose.onNodeWithTag("confirmCloseBatchReview").performClick()
+        compose.runOnIdle { assertEquals(1, batchReviewCount); assertEquals(0, finishCount) }
+    }
+
+    @Test fun finishingWithPendingDraftsCanDiscardAndFinish() {
+        var finishCount = 0
+        compose.setContent {
+            TaxyRayTheme {
+                BillBatchReviewSheet(listOf(bill("pending")), emptyList(), busy = false,
                     onReview = {}, onSkip = {}, onRestore = {}, onSupplement = {}, onAddImages = {}, onFinish = { finishCount++ })
             }
         }
         compose.onNodeWithTag("finishBillBatch").performClick()
-        compose.onNodeWithText("结束本次识别？").assertIsDisplayed()
-        compose.onNodeWithText("还有 1 笔未核对 结束后将放弃这些草稿\n已确认入账的账单会保留").assertIsDisplayed()
-        compose.runOnIdle { assertEquals(0, finishCount) }
-        compose.onNodeWithText("继续核对").performClick()
-        compose.onNodeWithTag("reviewBill-pending").assertIsDisplayed()
-        compose.onNodeWithContentDescription("关闭账单复核").performClick()
         compose.onNodeWithText("结束并放弃草稿").performClick()
         compose.runOnIdle { assertEquals(1, finishCount) }
     }
@@ -120,7 +140,7 @@ class BillBatchReviewTest {
         compose.onNodeWithTag("reviewBill-saved").assertDoesNotExist()
         compose.onNodeWithTag("skipBill-saved").assertDoesNotExist()
         compose.onNodeWithTag("finishBillBatch").performClick()
-        compose.onNodeWithText("结束本次识别？").assertDoesNotExist()
+        compose.onNodeWithText("账单未核对").assertDoesNotExist()
         compose.runOnIdle { assertEquals(1, finishCount) }
     }
 
@@ -169,6 +189,75 @@ class BillBatchReviewTest {
             assertEquals(true, draft.paymentConfirmed)
             assertEquals("0.00", draft.declaredTotal)
             assertEquals(null, draft.appliedDiscount)
+        }
+    }
+
+    @Test fun oneClickReviewButtonIsVisibleWhenPendingAndTriggersCallback() {
+        var batchReviewCalled = 0
+        compose.setContent {
+            TaxyRayTheme {
+                BillBatchReviewSheet(
+                    bills = listOf(bill("paid-1"), bill("paid-2")),
+                    warnings = emptyList(),
+                    busy = false,
+                    onReview = {},
+                    onSkip = {},
+                    onRestore = {},
+                    onSupplement = {},
+                    onAddImages = {},
+                    onFinish = {},
+                    onBatchReview = { batchReviewCalled++ }
+                )
+            }
+        }
+        compose.onNodeWithTag("batchReviewButton").assertIsDisplayed().performClick()
+        compose.runOnIdle {
+            assertEquals(1, batchReviewCalled)
+        }
+    }
+
+    @Test fun batchReviewSummaryDialogShowsEligibleAndIneligibleBreakdown() {
+        var confirmed = false
+        var dismissed = false
+        val eligibleBill = bill("b1")
+        val ineligibleBill = bill("b2", PaymentStatus.UNPAID)
+        val summary = BatchReviewSummary(
+            eligible = listOf(
+                BatchReviewEligibleItem(
+                    billId = "b1",
+                    settledDraft = eligibleBill.draft,
+                    hasAllocatedDiscount = true,
+                )
+            ),
+            ineligible = listOf(
+                BatchReviewIneligibleItem(
+                    billId = "b2",
+                    draft = ineligibleBill.draft,
+                    reason = "未付款账单不可直接入账",
+                )
+            ),
+        )
+        compose.setContent {
+            TaxyRayTheme {
+                BatchReviewSummaryDialog(
+                    summary = summary,
+                    busy = false,
+                    onConfirm = { confirmed = true },
+                    onDismiss = { dismissed = true },
+                )
+            }
+        }
+        compose.onNodeWithText("一键核对账单").assertIsDisplayed()
+        compose.onNodeWithText("符合入账条件：1 笔").assertIsDisplayed()
+        compose.onNodeWithText("实付合计：¥11.30").assertIsDisplayed()
+        compose.onNodeWithText("（含 1 笔已按实付分摊整单优惠）").assertIsDisplayed()
+        compose.onNodeWithText("需手动核对：1 笔").assertIsDisplayed()
+        compose.onNodeWithText("• 合成商户 b2：未付款账单不可直接入账").assertIsDisplayed()
+
+        compose.onNodeWithTag("confirmBatchReview").performClick()
+        compose.runOnIdle {
+            assertEquals(true, confirmed)
+            assertEquals(false, dismissed)
         }
     }
 

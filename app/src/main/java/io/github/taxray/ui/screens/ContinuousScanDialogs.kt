@@ -14,7 +14,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
+import io.github.taxray.BatchReviewSummary
 import io.github.taxray.core.DraftItem
+import io.github.taxray.core.TaxCalculator
 
 private val ScanDialogProperties = DialogProperties(
     dismissOnBackPress = false,
@@ -131,3 +133,112 @@ private fun DiscardScanDialog(busy: Boolean, onKeep: () -> Unit, onDiscard: () -
         },
     )
 }
+
+@Composable
+fun BatchReviewSummaryDialog(
+    summary: BatchReviewSummary,
+    busy: Boolean,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        properties = ScanDialogProperties,
+        title = {
+            Text(if (summary.eligible.isNotEmpty()) "一键核对账单" else "无法一键入账")
+        },
+        text = {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()).testTag("batchReviewSummary"),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (summary.eligible.isNotEmpty()) {
+                    Text(
+                        "符合入账条件：${summary.eligible.size} 笔",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        "实付合计：¥${TaxCalculator.formatMoney(summary.totalEligibleCents)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    if (summary.withDiscountsCount > 0) {
+                        Text(
+                            "（含 ${summary.withDiscountsCount} 笔已按实付分摊整单优惠）",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (summary.ineligible.isNotEmpty()) {
+                        HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                        Text(
+                            "需手动核对：${summary.ineligible.size} 笔",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        summary.ineligible.forEach { item ->
+                            Text(
+                                "• ${item.draft.storeName.ifBlank { "商户未识别" }}：${item.reason}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Text(
+                        "确认后将符合条件的账单保存到本地账本，需手动核对的账单仍可逐笔调整。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    Text(
+                        "当前 ${summary.ineligible.size} 笔待核对账单均需要手动处理：",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    summary.ineligible.forEach { item ->
+                        Text(
+                            "• ${item.draft.storeName.ifBlank { "商户未识别" }}：${item.reason}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        "请返回列表，针对性点击“核对账单”完成处理。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            if (summary.eligible.isNotEmpty()) {
+                Button(
+                    onClick = onConfirm,
+                    enabled = !busy,
+                    modifier = Modifier.testTag("confirmBatchReview"),
+                ) {
+                    Text("确认入账 (${summary.eligible.size} 笔)")
+                }
+            } else {
+                Button(
+                    onClick = onDismiss,
+                    enabled = !busy,
+                    modifier = Modifier.testTag("dismissBatchReview"),
+                ) {
+                    Text("我知道了")
+                }
+            }
+        },
+        dismissButton = {
+            if (summary.eligible.isNotEmpty()) {
+                TextButton(
+                    onClick = onDismiss,
+                    enabled = !busy,
+                    modifier = Modifier.testTag("cancelBatchReview"),
+                ) {
+                    Text("取消")
+                }
+            }
+        },
+    )
+}
+

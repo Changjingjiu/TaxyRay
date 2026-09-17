@@ -26,7 +26,7 @@ object DiscountAllocator {
         val denominator = BigInteger.valueOf(total)
         val numerators = original.map { BigInteger.valueOf(it).multiply(BigInteger.valueOf(paidTotalCents)) }
         val quotientRemainder = numerators.map { it.divideAndRemainder(denominator) }
-        val paid = quotientRemainder.map { it[0].longValueExact() }.toMutableList()
+        val paid = quotientRemainder.map { it[0].toLong() }.toMutableList()
         val remaining = Math.toIntExact(paidTotalCents - paid.sum())
         // Equal remainders use ticket order. No random tie-breaks or last-row dumping.
         original.indices.sortedWith(
