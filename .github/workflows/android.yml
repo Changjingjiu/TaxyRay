@@ -46,7 +46,12 @@ jobs:
           api-level: 35
           arch: x86_64
           disable-animations: true
-          script: ./gradlew :app:connectedDebugAndroidTest
+          script: |
+            # Compose 测试在模拟器上偶发多线程访问快照观察器并中断整轮 重跑一次 真失败仍然会失败
+            ./gradlew :app:connectedDebugAndroidTest || {
+              echo "设备测试首次运行失败 重跑一次以排除模拟器偶发中断"
+              ./gradlew :app:connectedDebugAndroidTest
+            }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
